@@ -191,19 +191,19 @@ export default function App() {
             initial="hidden"
             animate="visible"
             exit="exit"
-            className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 backdrop-blur-md z-50 px-6"
+            className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 backdrop-blur-md z-50 px-4 py-8 overflow-y-auto"
           >
-            <h2 className="text-4xl font-black mb-12 tracking-tight flex items-center gap-4">
-              <Zap className="text-[#00ff00] animate-pulse" />
+            <h2 className="text-2xl md:text-4xl font-black mb-6 md:mb-12 tracking-tight flex items-center gap-3 md:gap-4 shrink-0">
+              <Zap className="text-[#00ff00] animate-pulse w-6 h-6 md:w-8 md:h-8" />
               UPGRADE WÄHLEN
             </h2>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full max-w-5xl">
+            <div className="flex flex-col md:grid md:grid-cols-3 gap-4 md:gap-6 w-full max-w-5xl pb-8">
               {upgrades.map((u, i) => (
                 <motion.button
                   key={u.id}
-                  whileHover={{ scale: 1.05, y: -5 }}
-                  whileTap={{ scale: 0.95 }}
+                  whileHover={{ scale: 1.02, y: -2 }}
+                  whileTap={{ scale: 0.98 }}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: i * 0.1 }}
@@ -214,18 +214,20 @@ export default function App() {
                     }
                     setGameState('PLAYING');
                   }}
-                  className="flex flex-col items-start p-6 bg-white/5 border border-white/10 rounded-2xl hover:bg-white/10 hover:border-[#00ccff]/50 transition-colors text-left group"
+                  className="flex flex-row md:flex-col items-center md:items-start p-4 md:p-6 bg-white/5 border border-white/10 rounded-xl md:rounded-2xl hover:bg-white/10 hover:border-[#00ccff]/50 transition-colors text-left group gap-4 md:gap-0"
                 >
-                  <div className="w-12 h-12 bg-white/5 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                    {u.id === 'firerate' && <Zap className="text-[#ff9900]" />}
-                    {u.id === 'damage' && <Sword className="text-[#ff0055]" />}
-                    {u.id === 'speed' && <Wind className="text-[#00ccff]" />}
-                    {u.id === 'health' && <Heart className="text-[#00ff00]" />}
-                    {u.id === 'projectiles' && <Shield className="text-[#00ccff]" />}
-                    {u.id === 'lifesteal' && <Zap className="text-[#ff0055]" />}
+                  <div className="w-10 h-10 md:w-12 md:h-12 bg-white/5 rounded-lg md:rounded-xl flex items-center justify-center md:mb-4 group-hover:scale-110 transition-transform shrink-0">
+                    {u.id === 'firerate' && <Zap size={20} className="text-[#ff9900]" />}
+                    {u.id === 'damage' && <Sword size={20} className="text-[#ff0055]" />}
+                    {u.id === 'speed' && <Wind size={20} className="text-[#00ccff]" />}
+                    {u.id === 'health' && <Heart size={20} className="text-[#00ff00]" />}
+                    {u.id === 'projectiles' && <Shield size={20} className="text-[#00ccff]" />}
+                    {u.id === 'lifesteal' && <Zap size={20} className="text-[#ff0055]" />}
                   </div>
-                  <h3 className="text-xl font-bold mb-2 group-hover:text-[#00ccff] transition-colors">{u.name}</h3>
-                  <p className="text-sm text-gray-400 leading-relaxed">{u.description}</p>
+                  <div>
+                    <h3 className="text-lg md:text-xl font-bold md:mb-2 group-hover:text-[#00ccff] transition-colors">{u.name}</h3>
+                    <p className="text-xs md:text-sm text-gray-400 leading-tight md:leading-relaxed">{u.description}</p>
+                  </div>
                 </motion.button>
               ))}
             </div>
