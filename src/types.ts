@@ -1,0 +1,57 @@
+export interface Vector {
+  x: number;
+  y: number;
+}
+
+export interface Entity {
+  id: string;
+  pos: Vector;
+  vel: Vector;
+  radius: number;
+  color: string;
+}
+
+export interface Player extends Entity {
+  health: number;
+  maxHealth: number;
+  speed: number;
+  level: number;
+  xp: number;
+  xpNext: number;
+  fireRate: number; // bullets per second
+  damage: number;
+  projCount: number;
+}
+
+export interface Enemy extends Entity {
+  health: number;
+  maxHealth: number;
+  speed: number;
+  damage: number;
+  value: number; // XP value
+}
+
+export interface Bullet extends Entity {
+  damage: number;
+  distanceTraveled: number;
+  maxDistance: number;
+}
+
+export interface XPOrb extends Entity {
+  value: number;
+}
+
+export interface Particle extends Entity {
+  life: number;
+  maxLife: number;
+  opacity: number;
+}
+
+export type GameState = 'MENU' | 'PLAYING' | 'LEVEL_UP' | 'GAME_OVER';
+
+export interface Upgrade {
+  id: string;
+  name: string;
+  description: string;
+  onApply: (player: Player) => Player;
+}
