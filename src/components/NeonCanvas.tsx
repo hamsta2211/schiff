@@ -88,6 +88,14 @@ export const NeonCanvas: React.FC<NeonCanvasProps> = ({
   const lastFireRef = useRef<number>(0);
   const spawnTimerRef = useRef<number>(0);
   const frameCountRef = useRef<number>(0);
+  const joystickDirRef = useRef<Vector>({ x: 0, y: 0 });
+
+  // Update joystick ref whenever prop changes
+  useEffect(() => {
+    if (joystickDir) {
+      joystickDirRef.current = joystickDir;
+    }
+  }, [joystickDir]);
 
   // Input Handling
   useEffect(() => {
@@ -170,13 +178,15 @@ export const NeonCanvas: React.FC<NeonCanvasProps> = ({
     if (keysRef.current.has('KeyD') || keysRef.current.has('ArrowRight')) dx += 1;
 
     // Joystick Input
-    if (joystickDir && (joystickDir.x !== 0 || joystickDir.y !== 0)) {
-      dx = joystickDir.x;
-      dy = joystickDir.y;
+    const jDir = joystickDirRef.current;
+    if (jDir.x !== 0 || jDir.y !== 0) {
+      dx = jDir.x;
+      dy = jDir.y;
     }
 
     if (dx !== 0 || dy !== 0) {
-      if (!joystickDir || (joystickDir.x === 0 && joystickDir.y === 0)) {
+      // If using binary keyboard input, normalize. If using joystick, use analog.
+      if (jDir.x === 0 && jDir.y === 0) {
         const mag = Math.sqrt(dx * dx + dy * dy);
         dx /= mag;
         dy /= mag;
@@ -426,7 +436,7 @@ export const NeonCanvas: React.FC<NeonCanvasProps> = ({
     ctx.fillText(`LVL ${p.level}`, 20, 65);
 
     requestRef.current = requestAnimationFrame(gameLoop);
-  }, [gameState, onGameOver, onLevelUp, onDamage, spawnEnemy, joystickDir]);
+  }, [gameState, onGameOver, onLevelUp, onDamage, spawnEnemy]); // Removed joystickDir to stabilize loop
 
   useEffect(() => {
     requestRef.current = requestAnimationFrame(gameLoop);

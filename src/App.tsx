@@ -16,6 +16,9 @@ export default function App() {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [joystickDir, setJoystickDir] = useState<Vector>({ x: 0, y: 0 });
   const [isTouchDevice, setIsTouchDevice] = useState(false);
+  
+  // Track the full state passed from the game to apply upgrades correctly
+  const [currentPlayerState, setCurrentPlayerState] = useState<Player | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -51,10 +54,12 @@ export default function App() {
   const startGame = () => {
     setGameState('PLAYING');
     setPlayerStats({});
+    setCurrentPlayerState(null);
     setScore(0);
   };
 
   const handleLevelUp = useCallback((player: Player) => {
+    setCurrentPlayerState(player);
     setGameState('LEVEL_UP');
     setUpgrades(getRandomUpgrades(3));
     confetti({
@@ -203,7 +208,10 @@ export default function App() {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: i * 0.1 }}
                   onClick={() => {
-                    setPlayerStats(prev => u.onApply({ ...prev } as any));
+                    if (currentPlayerState) {
+                      const newStats = u.onApply({ ...currentPlayerState });
+                      setPlayerStats(newStats);
+                    }
                     setGameState('PLAYING');
                   }}
                   className="flex flex-col items-start p-6 bg-white/5 border border-white/10 rounded-2xl hover:bg-white/10 hover:border-[#00ccff]/50 transition-colors text-left group"
