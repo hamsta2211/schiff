@@ -24,6 +24,7 @@ export default function App() {
   const [username, setUsername] = useState<string>('');
   const [personalHighScore, setPersonalHighScore] = useState<number>(0);
   const [lastScore, setLastScore] = useState(0); 
+  const [gameStats, setGameStats] = useState({ health: 100, maxHealth: 100, level: 1, xp: 0, xpNext: 100 });
   
   const [currentPlayerState, setCurrentPlayerState] = useState<Player | null>(null);
 
@@ -234,6 +235,7 @@ export default function App() {
         onLevelUp={handleLevelUp} 
         onGameOver={handleGameOver}
         onScoreUpdate={setScore}
+        onStatsUpdate={setGameStats}
         onDamage={triggerShake}
         playerStats={playerStats}
         joystickDir={joystickDir}
@@ -248,40 +250,80 @@ export default function App() {
         />
       )}
 
-      {/* Global Controls */}
-      <div className="absolute top-6 right-6 z-[60] flex items-center gap-4">
+      {/* Global Controls & HUD */}
+      <div className="absolute top-4 left-4 right-4 md:top-6 md:left-6 md:right-6 z-[60] flex items-start justify-between pointer-events-none">
         {gameState === 'PLAYING' && (
-          <button
-            onClick={() => setGameState('PAUSED')}
-            className="p-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl transition-all active:scale-95 group backdrop-blur-md"
-            title="Pause"
-          >
-            <Pause size={20} className="text-white group-hover:text-[#00ccff] transition-colors" />
-          </button>
-        )}
-        {session && (
-          <div className="flex items-center gap-3 px-4 py-2 bg-white/5 border border-white/10 rounded-xl backdrop-blur-md">
-            <span className="text-sm font-bold text-[#00ccff]">{username}</span>
-            <button 
-              onClick={() => supabase.auth.signOut()}
-              className="p-1 hover:text-[#ff0055] transition-colors"
-              title="Abmelden"
-            >
-              <LogOut size={16} />
-            </button>
+          <div className="flex flex-col gap-2 w-full max-w-[160px] sm:max-w-[200px] md:max-w-xs pointer-events-auto">
+            {/* Health Bar */}
+            <div className="relative h-4 md:h-6 bg-black/40 border border-white/10 rounded-full overflow-hidden backdrop-blur-sm">
+              <motion.div 
+                initial={false}
+                animate={{ width: `${(gameStats.health / gameStats.maxHealth) * 100}%` }}
+                className={`h-full ${gameStats.health < gameStats.maxHealth * 0.3 ? 'bg-[#ff0055]' : 'bg-[#00ff55]'} shadow-[0_0_10px_rgba(0,255,85,0.5)]`}
+              />
+              <div className="absolute inset-0 flex items-center justify-center">
+                <span className="text-[10px] font-black italic text-white drop-shadow-md">
+                  {Math.ceil(gameStats.health)} / {gameStats.maxHealth}
+                </span>
+              </div>
+            </div>
+
+            {/* XP and Level */}
+            <div className="flex items-center gap-3">
+              <div className="flex-1 h-1.5 md:h-2 bg-black/40 border border-white/5 rounded-full overflow-hidden">
+                <motion.div 
+                  initial={false}
+                  animate={{ width: `${(gameStats.xp / gameStats.xpNext) * 100}%` }}
+                  className="h-full bg-[#00ccff] shadow-[0_0_5px_rgba(0,204,255,0.5)]"
+                />
+              </div>
+              <div className="bg-[#00ccff] text-[#050a14] px-2 py-0.5 rounded font-black text-xs italic shrink-0">
+                LVL {gameStats.level}
+              </div>
+            </div>
           </div>
         )}
-        <button
-          onClick={toggleFullscreen}
-          className="p-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl transition-all active:scale-95 group backdrop-blur-md"
-          title="Toggle Fullscreen"
-        >
-          {isFullscreen ? (
-            <Minimize2 size={20} className="text-white group-hover:text-[#00ccff] transition-colors" />
-          ) : (
-            <Maximize2 size={20} className="text-white group-hover:text-[#00ccff] transition-colors" />
+
+        <div className="flex items-center gap-3 pointer-events-auto ml-auto">
+          {gameState === 'PLAYING' && (
+            <>
+              <div className="px-4 py-2 bg-black/60 border border-white/10 rounded-xl backdrop-blur-md flex flex-col items-end">
+                <span className="text-[8px] font-bold uppercase tracking-widest text-[#00ccff]">Score</span>
+                <span className="text-xl font-black font-mono leading-none">{score}</span>
+              </div>
+              <button
+                onClick={() => setGameState('PAUSED')}
+                className="w-12 h-12 flex items-center justify-center bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl transition-all active:scale-95 group backdrop-blur-md"
+                title="Pause"
+              >
+                <Pause size={24} className="text-white group-hover:text-[#00ccff] transition-colors" />
+              </button>
+            </>
           )}
-        </button>
+          {(gameState === 'MENU' || gameState === 'AUTH' || gameState === 'LEADERBOARD') && session && (
+            <div className="hidden sm:flex items-center gap-3 px-4 py-2 bg-white/5 border border-white/10 rounded-xl backdrop-blur-md">
+              <span className="text-sm font-bold text-[#00ccff]">{username}</span>
+              <button 
+                onClick={() => supabase.auth.signOut()}
+                className="p-1 hover:text-[#ff0055] transition-colors"
+                title="Abmelden"
+              >
+                <LogOut size={16} />
+              </button>
+            </div>
+          )}
+          <button
+            onClick={toggleFullscreen}
+            className="w-12 h-12 flex items-center justify-center bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl transition-all active:scale-95 group backdrop-blur-md"
+            title="Toggle Fullscreen"
+          >
+            {isFullscreen ? (
+              <Minimize2 size={24} className="text-white group-hover:text-[#00ccff] transition-colors" />
+            ) : (
+              <Maximize2 size={24} className="text-white group-hover:text-[#00ccff] transition-colors" />
+            )}
+          </button>
+        </div>
       </div>
 
       {/* Overlay UI */}
@@ -299,10 +341,10 @@ export default function App() {
               PAUSE
             </h2>
             
-            <div className="flex flex-col gap-4 w-full max-w-xs mx-auto">
+            <div className="flex flex-col sm:flex-row gap-4 w-full max-w-xs sm:max-w-md mx-auto">
               <button 
                 onClick={() => setGameState('PLAYING')}
-                className="group relative px-10 py-5 bg-[#00ccff] text-[#050a14] font-bold text-2xl rounded-lg overflow-hidden transition-all hover:scale-105 active:scale-95 shadow-[0_0_20px_rgba(0,204,255,0.4)] flex items-center justify-center gap-3"
+                className="flex-1 group relative px-10 py-5 bg-[#00ccff] text-[#050a14] font-bold text-2xl rounded-xl overflow-hidden transition-all hover:scale-105 active:scale-95 shadow-[0_0_20px_rgba(0,204,255,0.4)] flex items-center justify-center gap-3"
               >
                 <Play size={24} fill="currentColor" />
                 WEITER
@@ -310,14 +352,14 @@ export default function App() {
               
               <button 
                 onClick={() => handleQuitAndSave(score)}
-                className="px-10 py-4 bg-white/10 text-white font-bold text-lg rounded-lg hover:bg-white/20 transition-all flex items-center justify-center gap-3 border border-white/10"
+                className="flex-1 px-10 py-4 bg-white/10 text-white font-bold text-lg rounded-xl hover:bg-white/20 transition-all flex items-center justify-center gap-3 border border-white/10"
               >
                 <Home size={20} />
-                BEENDEN & SPEICHERN
+                BEENDEN
               </button>
             </div>
             
-            <div className="mt-12 p-4 bg-white/5 border border-white/10 rounded-xl">
+            <div className="mt-8 p-4 bg-white/5 border border-white/10 rounded-xl min-w-[200px]">
               <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-1">Aktueller Score</p>
               <p className="text-3xl font-black text-white font-mono">{score}</p>
             </div>
@@ -335,9 +377,9 @@ export default function App() {
             <motion.div
               initial={{ y: -50 }}
               animate={{ y: 0 }}
-              className="mb-8 md:mb-12 shrink-0"
+              className="mb-8 md:mb-12 shrink-0 px-4"
             >
-              <h1 className="text-6xl md:text-9xl font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-br from-[#00ccff] to-[#ff0055] drop-shadow-[0_0_15px_rgba(0,204,255,0.5)]">
+              <h1 className="text-7xl sm:text-8xl md:text-9xl font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-br from-[#00ccff] to-[#ff0055] drop-shadow-[0_0_15px_rgba(0,204,255,0.3)]">
                 SHIFF
               </h1>
             </motion.div>
@@ -407,12 +449,12 @@ export default function App() {
             exit="exit"
             className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 backdrop-blur-md z-50 px-4 py-8 overflow-y-auto"
           >
-            <h2 className="text-2xl md:text-4xl font-black mb-6 md:mb-12 tracking-tight flex items-center gap-3 md:gap-4 shrink-0">
-              <Zap className="text-[#00ff00] animate-pulse w-6 h-6 md:w-8 md:h-8" />
+            <h2 className="text-xl sm:text-2xl md:text-4xl font-black mb-4 md:mb-12 tracking-tight flex items-center gap-2 md:gap-4 shrink-0">
+              <Zap className="text-[#00ff00] animate-pulse w-5 h-5 md:w-8 md:h-8" />
               UPGRADE WÄHLEN
             </h2>
 
-            <div className="flex flex-col md:grid md:grid-cols-3 gap-4 md:gap-6 w-full max-w-5xl pb-8">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-6 w-full max-w-5xl pb-8">
               {upgrades.map((u, i) => (
                 <motion.button
                   key={u.id}
@@ -430,7 +472,7 @@ export default function App() {
                   }}
                   className="flex flex-row md:flex-col items-center md:items-start p-4 md:p-6 bg-white/5 border border-white/10 rounded-xl md:rounded-2xl hover:bg-white/10 hover:border-[#00ccff]/50 transition-colors text-left group gap-4 md:gap-0"
                 >
-                  <div className="w-10 h-10 md:w-12 md:h-12 bg-white/5 rounded-lg md:rounded-xl flex items-center justify-center md:mb-4 group-hover:scale-110 transition-transform shrink-0">
+                  <div className="w-8 h-8 md:w-12 md:h-12 bg-white/5 rounded-lg md:rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform shrink-0">
                     {u.id === 'firerate' && <Zap size={20} className="text-[#ff9900]" />}
                     {u.id === 'damage' && <Sword size={20} className="text-[#ff0055]" />}
                     {u.id === 'speed' && <Wind size={20} className="text-[#00ccff]" />}
@@ -439,8 +481,8 @@ export default function App() {
                     {u.id === 'lifesteal' && <Zap size={20} className="text-[#ff0055]" />}
                   </div>
                   <div>
-                    <h3 className="text-lg md:text-xl font-bold md:mb-2 group-hover:text-[#00ccff] transition-colors">{u.name}</h3>
-                    <p className="text-xs md:text-sm text-gray-400 leading-tight md:leading-relaxed">{u.description}</p>
+                    <h3 className="text-base md:text-xl font-bold md:mb-2 group-hover:text-[#00ccff] transition-colors">{u.name}</h3>
+                    <p className="text-[10px] md:text-sm text-gray-400 leading-tight md:leading-relaxed">{u.description}</p>
                   </div>
                 </motion.button>
               ))}
@@ -457,7 +499,7 @@ export default function App() {
             exit="exit"
             className="absolute inset-0 flex flex-col items-center justify-center bg-black/90 backdrop-blur-sm z-50 px-6 py-10 text-center overflow-y-auto"
           >
-            <h2 className="text-5xl md:text-8xl font-black mb-4 tracking-tighter text-[#ff0055] drop-shadow-[0_0_15px_rgba(255,0,85,0.5)]">
+            <h2 className="text-5xl sm:text-7xl md:text-8xl font-black mb-4 tracking-tighter text-[#ff0055] drop-shadow-[0_0_15px_rgba(255,0,85,0.5)]">
               GAME OVER
             </h2>
             <p className="text-2xl text-gray-400 mb-6">Punktestand: <span className="text-white font-mono">{score}</span></p>

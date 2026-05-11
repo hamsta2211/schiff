@@ -6,6 +6,7 @@ interface NeonCanvasProps {
   onLevelUp: (player: Player) => void;
   onGameOver: (score: number) => void;
   onScoreUpdate?: (score: number) => void;
+  onStatsUpdate?: (stats: { health: number; maxHealth: number; level: number; xp: number; xpNext: number }) => void;
   onDamage?: () => void;
   playerStats: Partial<Player>;
   joystickDir?: Vector;
@@ -26,6 +27,7 @@ export const NeonCanvas: React.FC<NeonCanvasProps> = ({
   onLevelUp, 
   onGameOver,
   onScoreUpdate,
+  onStatsUpdate,
   onDamage,
   playerStats,
   joystickDir
@@ -267,9 +269,18 @@ export const NeonCanvas: React.FC<NeonCanvasProps> = ({
       spawnTimerRef.current = Math.max(10, 60 - p.level * 2);
     }
 
-    // Periodically update score for the UI
-    if (frameCountRef.current % 30 === 0 && onScoreUpdate) {
-      onScoreUpdate(p.score);
+    // Periodically update score and stats for the UI
+    if (frameCountRef.current % 10 === 0) {
+      if (onScoreUpdate) onScoreUpdate(p.score);
+      if (onStatsUpdate) {
+        onStatsUpdate({
+          health: p.health,
+          maxHealth: p.maxHealth,
+          level: p.level,
+          xp: p.xp,
+          xpNext: p.xpNext
+        });
+      }
     }
 
     // 4. Update Entities
@@ -442,30 +453,9 @@ export const NeonCanvas: React.FC<NeonCanvasProps> = ({
     ctx.closePath();
     ctx.fill();
 
-    // HUD (Internal to Canvas for performance)
-    ctx.shadowBlur = 0;
-    
-    // Health Bar
-    const healthBarW = 200;
-    const hpPerc = Math.max(0, p.health / p.maxHealth);
-    ctx.fillStyle = 'rgba(0,0,0,0.5)';
-    ctx.fillRect(20, 20, healthBarW, 10);
-    ctx.fillStyle = COLORS.player;
-    ctx.fillRect(20, 20, healthBarW * hpPerc, 10);
-
-    // XP Bar
-    const xpPerc = p.xp / p.xpNext;
-    ctx.fillStyle = 'rgba(0,0,0,0.5)';
-    ctx.fillRect(20, 40, width - 40, 6);
-    ctx.fillStyle = COLORS.xp;
-    ctx.fillRect(20, 40, (width - 40) * xpPerc, 6);
-
-    ctx.fillStyle = 'white';
-    ctx.font = '14px monospace';
-    ctx.fillText(`LVL ${p.level}`, 20, 65);
-
+    // All drawing and HUD logic is now handled in React or earlier in loop
     requestRef.current = requestAnimationFrame(gameLoop);
-  }, [gameState, onGameOver, onLevelUp, onScoreUpdate, onDamage, spawnEnemy]); // Removed joystickDir to stabilize loop
+  }, [gameState, onGameOver, onLevelUp, onScoreUpdate, onStatsUpdate, onDamage, spawnEnemy]); // Removed joystickDir to stabilize loop
 
   useEffect(() => {
     requestRef.current = requestAnimationFrame(gameLoop);

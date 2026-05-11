@@ -105,17 +105,17 @@ export const SupabaseAuth: React.FC<SupabaseAuthProps> = ({ onAuthSuccess }) => 
     <motion.div 
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
-      className="w-full max-w-md p-5 md:p-8 bg-white/5 border border-white/10 rounded-3xl backdrop-blur-xl shadow-2xl max-h-[95vh] overflow-y-auto custom-scrollbar"
+      className="w-full max-w-md p-4 sm:p-6 md:p-8 bg-white/5 border border-white/10 rounded-3xl backdrop-blur-xl shadow-2xl max-h-[90vh] overflow-y-auto custom-scrollbar"
     >
-      <h2 className="text-xl md:text-3xl font-black mb-4 md:mb-8 text-center bg-clip-text text-transparent bg-gradient-to-r from-[#00ccff] to-[#ff0055]">
+      <h2 className="text-xl sm:text-2xl md:text-3xl font-black mb-4 md:mb-8 text-center bg-clip-text text-transparent bg-gradient-to-r from-[#00ccff] to-[#ff0055]">
         {isSignUp ? 'ACCOUNT ERSTELLEN' : 'ANMELDEN'}
       </h2>
 
-      <div className="mb-6">
+      <div className="mb-4 sm:mb-6">
         <button
           onClick={handleGoogleLogin}
           disabled={loading}
-          className="w-full py-3 bg-white text-black font-bold rounded-xl flex items-center justify-center gap-3 hover:bg-gray-100 transition-all active:scale-95 border border-white mb-6"
+          className="w-full py-2.5 sm:py-3 bg-white text-black font-bold rounded-xl flex items-center justify-center gap-3 hover:bg-gray-100 transition-all active:scale-95 border border-white mb-4 sm:mb-6"
         >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
             <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
