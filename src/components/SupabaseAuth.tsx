@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { supabase } from '../lib/supabase';
+import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { motion } from 'motion/react';
 import { User, Lock, Mail, Loader2 } from 'lucide-react';
 
@@ -21,6 +21,10 @@ export const SupabaseAuth: React.FC<SupabaseAuthProps> = ({ onAuthSuccess }) => 
     setError(null);
 
     try {
+      if (!isSupabaseConfigured) {
+        throw new Error('Supabase ist noch nicht konfiguriert. Bitte füge URL und Key in den AI Studio Einstellungen hinzu.');
+      }
+
       if (isSignUp) {
         // Prüfen, ob der Nutzername bereits vergeben ist
         const { data: existingUser, error: checkError } = await supabase
@@ -64,7 +68,10 @@ export const SupabaseAuth: React.FC<SupabaseAuthProps> = ({ onAuthSuccess }) => 
         onAuthSuccess();
       }
     } catch (err: any) {
-      setError(err.message || 'Ein Fehler ist aufgetreten');
+      console.error('Auth Error:', err);
+      let msg = err.message || 'Ein Fehler ist aufgetreten';
+      if (msg.includes('Failed to fetch')) msg = 'Keine Verbindung zum Server (Netzwerkfehler)';
+      setError(msg);
     } finally {
       setLoading(false);
     }
@@ -74,78 +81,81 @@ export const SupabaseAuth: React.FC<SupabaseAuthProps> = ({ onAuthSuccess }) => 
     <motion.div 
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
-      className="w-full max-w-md p-6 md:p-8 bg-white/5 border border-white/10 rounded-3xl backdrop-blur-xl shadow-2xl max-h-[90vh] overflow-y-auto custom-scrollbar"
+      className="w-full max-w-md p-5 md:p-8 bg-white/5 border border-white/10 rounded-3xl backdrop-blur-xl shadow-2xl max-h-[95vh] overflow-y-auto custom-scrollbar"
     >
-      <h2 className="text-2xl md:text-3xl font-black mb-6 md:mb-8 text-center bg-clip-text text-transparent bg-gradient-to-r from-[#00ccff] to-[#ff0055]">
+      <h2 className="text-xl md:text-3xl font-black mb-4 md:mb-8 text-center bg-clip-text text-transparent bg-gradient-to-r from-[#00ccff] to-[#ff0055]">
         {isSignUp ? 'ACCOUNT ERSTELLEN' : 'ANMELDEN'}
       </h2>
 
-      <form onSubmit={handleAuth} className="space-y-4 md:space-y-6">
+      <form onSubmit={handleAuth} className="space-y-3 md:space-y-6">
         {isSignUp && (
-          <div className="space-y-1 md:space-y-2">
-            <label className="text-[10px] md:text-xs font-bold uppercase tracking-widest text-gray-400 ml-1">Nutzername</label>
+          <div className="space-y-1">
+            <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 ml-1">Nutzername</label>
             <div className="relative">
-              <User className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 w-4 h-4 md:w-5 md:h-5" />
+              <User className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 w-4 h-4" />
               <input
                 type="text"
                 placeholder="SurvivorX"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                className="w-full bg-black/40 border border-white/10 rounded-xl py-3 md:py-4 pl-12 pr-4 focus:border-[#00ccff] transition-colors outline-none text-white text-sm md:text-base"
+                className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 md:py-4 pl-11 pr-4 focus:border-[#00ccff] transition-colors outline-none text-white text-sm"
                 required={isSignUp}
               />
             </div>
           </div>
         )}
 
-        <div className="space-y-1 md:space-y-2">
-          <label className="text-[10px] md:text-xs font-bold uppercase tracking-widest text-gray-400 ml-1">Email</label>
+        <div className="space-y-1">
+          <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 ml-1">Email</label>
           <div className="relative">
-            <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 w-4 h-4 md:w-5 md:h-5" />
+            <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 w-4 h-4" />
             <input
               type="email"
               placeholder="player@shiff.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full bg-black/40 border border-white/10 rounded-xl py-3 md:py-4 pl-12 pr-4 focus:border-[#00ccff] transition-colors outline-none text-white text-sm md:text-base"
+              className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 md:py-4 pl-11 pr-4 focus:border-[#00ccff] transition-colors outline-none text-white text-sm"
               required
             />
           </div>
         </div>
 
-        <div className="space-y-1 md:space-y-2">
-          <label className="text-[10px] md:text-xs font-bold uppercase tracking-widest text-gray-400 ml-1">Passwort</label>
+        <div className="space-y-1">
+          <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 ml-1">Passwort</label>
           <div className="relative">
-            <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 w-4 h-4 md:w-5 md:h-5" />
+            <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 w-4 h-4" />
             <input
               type="password"
               placeholder="••••••••"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full bg-black/40 border border-white/10 rounded-xl py-3 md:py-4 pl-12 pr-4 focus:border-[#00ccff] transition-colors outline-none text-white text-sm md:text-base"
+              className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 md:py-4 pl-11 pr-4 focus:border-[#00ccff] transition-colors outline-none text-white text-sm"
               required
             />
           </div>
         </div>
 
         {error && (
-          <p className="text-[#ff0055] text-[10px] md:text-sm font-medium px-2">{error}</p>
+          <p className="text-[#ff0055] text-[10px] md:text-xs font-semibold px-2 bg-red-500/10 py-2 rounded-lg border border-red-500/20">{error}</p>
         )}
 
         <button
           type="submit"
           disabled={loading}
-          className="w-full py-3 md:py-4 bg-[#00ccff] text-[#050a14] font-black text-base md:text-lg rounded-xl flex items-center justify-center gap-2 hover:bg-[#00e1ff] transition-all disabled:opacity-50 active:scale-95 shadow-[0_0_20px_rgba(0,204,255,0.3)] mt-2 md:mt-4"
+          className="w-full py-3 md:py-4 bg-[#00ccff] text-[#050a14] font-black text-sm md:text-lg rounded-xl flex items-center justify-center gap-2 hover:bg-[#00e1ff] transition-all disabled:opacity-50 active:scale-95 shadow-[0_0_20px_rgba(0,204,255,0.3)] mt-2"
         >
-          {loading ? <Loader2 className="animate-spin w-5 h-5 md:w-6 md:h-6" /> : (isSignUp ? 'REGISTRIEREN' : 'STARTEN')}
+          {loading ? <Loader2 className="animate-spin w-5 h-5 md:w-6 md:h-6" /> : (isSignUp ? 'REGISTRIEREN' : 'ANMELDEN')}
         </button>
       </form>
 
       <button
-        onClick={() => setIsSignUp(!isSignUp)}
+        onClick={() => {
+          setIsSignUp(!isSignUp);
+          setError(null);
+        }}
         className="w-full mt-4 md:mt-6 text-xs md:text-sm text-gray-400 hover:text-white transition-colors font-medium underline underline-offset-4"
       >
-        {isSignUp ? 'Berreits einen Account? Hier anmelden' : 'Kein Account? Jetzt registrieren'}
+        {isSignUp ? 'Bereits einen Account? Hier anmelden' : 'Kein Account? Jetzt registrieren'}
       </button>
     </motion.div>
   );

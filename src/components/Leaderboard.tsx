@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { supabase } from '../lib/supabase';
+import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { Trophy, Medal, User, Zap, Loader2 } from 'lucide-react';
 import { motion } from 'motion/react';
 
@@ -14,16 +14,21 @@ export const Leaderboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchScores(true);
-    
-    const interval = setInterval(() => {
-      fetchScores(false);
-    }, 5000);
+    if (isSupabaseConfigured) {
+      fetchScores(true);
+      
+      const interval = setInterval(() => {
+        fetchScores(false);
+      }, 5000);
 
-    return () => clearInterval(interval);
+      return () => clearInterval(interval);
+    } else {
+      setLoading(false);
+    }
   }, []);
 
   const fetchScores = async (showLoading: boolean) => {
+    if (!isSupabaseConfigured) return;
     if (showLoading) setLoading(true);
     try {
       // Wir holen alle Scores und filtern sie in JS, um sicherzustellen, dass jeder User nur einmal erscheint

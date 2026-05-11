@@ -4,7 +4,7 @@ import { NeonCanvas } from './components/NeonCanvas';
 import { Joystick } from './components/Joystick';
 import { SupabaseAuth } from './components/SupabaseAuth';
 import { Leaderboard } from './components/Leaderboard';
-import { supabase } from './lib/supabase';
+import { supabase, isSupabaseConfigured } from './lib/supabase';
 import { GameState, Player, Upgrade, Vector } from './types';
 import { getRandomUpgrades } from './upgrades';
 import confetti from 'canvas-confetti';
@@ -31,26 +31,38 @@ export default function App() {
   useEffect(() => {
     setIsTouchDevice('ontouchstart' in window || navigator.maxTouchPoints > 0);
     
-    // Auth Check
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      if (session?.user) {
-        setUsername(session.user.user_metadata.username || session.user.email?.split('@')[0] || 'Player');
-      }
-    });
+    if (isSupabaseConfigured) {
+      // Auth Check
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        setSession(session);
+        if (session?.user) {
+          setUsername(session.user.user_metadata.username || session.user.email?.split('@')[0] || 'Player');
+        }
+      });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      if (session?.user) {
-        setUsername(session.user.user_metadata.username || session.user.email?.split('@')[0] || 'Player');
-      }
-    });
+      const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+        setSession(session);
+        if (session?.user) {
+          setUsername(session.user.user_metadata.username || session.user.email?.split('@')[0] || 'Player');
+        }
+      });
 
-    const handleFullscreenChange = () => {
-      setIsFullscreen(!!document.fullscreenElement);
-    };
-    document.addEventListener('fullscreenchange', handleFullscreenChange);
-    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      const handleFullscreenChange = () => {
+        setIsFullscreen(!!document.fullscreenElement);
+      };
+      document.addEventListener('fullscreenchange', handleFullscreenChange);
+
+      return () => {
+        subscription.unsubscribe();
+        document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      };
+    } else {
+      const handleFullscreenChange = () => {
+        setIsFullscreen(!!document.fullscreenElement);
+      };
+      document.addEventListener('fullscreenchange', handleFullscreenChange);
+      return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+    }
   }, []);
 
   const handleTouchStart = (e: React.TouchEvent) => {
@@ -110,16 +122,18 @@ export default function App() {
     setScore(finalScore);
 
     // Save Score to Supabase
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session?.user) {
-      try {
-        await supabase.from('high_scores').insert({
-          user_id: session.user.id,
-          username: session.user.user_metadata.username || session.user.email?.split('@')[0],
-          score: finalScore,
-        });
-      } catch (err) {
-        console.error('Failed to save score:', err);
+    if (isSupabaseConfigured) {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        try {
+          await supabase.from('high_scores').insert({
+            user_id: session.user.id,
+            username: session.user.user_metadata.username || session.user.email?.split('@')[0],
+            score: finalScore,
+          });
+        } catch (err) {
+          console.error('Failed to save score:', err);
+        }
       }
     }
   }, []);
