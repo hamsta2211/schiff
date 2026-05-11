@@ -22,11 +22,31 @@ export default function App() {
   const [isTouchDevice, setIsTouchDevice] = useState(false);
   const [session, setSession] = useState<any>(null);
   const [username, setUsername] = useState<string>('');
+  const [personalHighScore, setPersonalHighScore] = useState<number>(0);
   
   // Track the full state passed from the game to apply upgrades correctly
   const [currentPlayerState, setCurrentPlayerState] = useState<Player | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
+
+  const fetchPersonalHighScore = async (uid: string) => {
+    if (!isSupabaseConfigured) return;
+    try {
+      const { data, error } = await supabase
+        .from('high_scores')
+        .select('score')
+        .eq('user_id', uid)
+        .order('score', { ascending: false })
+        .limit(1);
+      
+      if (error) throw error;
+      if (data && data.length > 0) {
+        setPersonalHighScore(data[0].score);
+      }
+    } catch (err) {
+      console.error('Failed to fetch personal high score:', err);
+    }
+  };
 
   useEffect(() => {
     setIsTouchDevice('ontouchstart' in window || navigator.maxTouchPoints > 0);
@@ -37,6 +57,7 @@ export default function App() {
         setSession(session);
         if (session?.user) {
           setUsername(session.user.user_metadata.username || session.user.email?.split('@')[0] || 'Player');
+          fetchPersonalHighScore(session.user.id);
         }
       });
 
@@ -44,6 +65,9 @@ export default function App() {
         setSession(session);
         if (session?.user) {
           setUsername(session.user.user_metadata.username || session.user.email?.split('@')[0] || 'Player');
+          fetchPersonalHighScore(session.user.id);
+        } else {
+          setPersonalHighScore(0);
         }
       });
 
@@ -131,12 +155,16 @@ export default function App() {
             username: session.user.user_metadata.username || session.user.email?.split('@')[0],
             score: finalScore,
           });
+          // Update personal high score if needed
+          if (finalScore > personalHighScore) {
+            setPersonalHighScore(finalScore);
+          }
         } catch (err) {
           console.error('Failed to save score:', err);
         }
       }
     }
-  }, []);
+  }, [personalHighScore]);
 
   const applyUpgrade = (upgrade: Upgrade) => {
     setPlayerStats((prev) => {
@@ -231,6 +259,13 @@ export default function App() {
             </motion.div>
 
             <div className="flex flex-col gap-4 w-full max-w-sm">
+              {session && (
+                <div className="mb-2 p-4 bg-white/5 border border-[#00ccff]/20 rounded-xl">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-1">Dein Bestwert</p>
+                  <p className="text-3xl font-black text-[#00ccff] font-mono">{personalHighScore}</p>
+                </div>
+              )}
+              
               <button 
                 onClick={startGame}
                 className="group relative px-8 py-4 bg-[#00ccff] text-[#050a14] font-bold text-2xl rounded-lg overflow-hidden transition-all hover:scale-105 active:scale-95 shadow-[0_0_20px_rgba(0,204,255,0.4)]"
