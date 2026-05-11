@@ -52,7 +52,25 @@ export const NeonCanvas: React.FC<NeonCanvasProps> = ({
     projCount: 1,
   });
 
-  // Sync player stats from props (Level Up rewards) and Reset on Menu
+  // Sync player stats from props (Level Up rewards)
+  useEffect(() => {
+    if (playerStats && Object.keys(playerStats).length > 0) {
+      // We only want to merge "functional" stats from upgrades, 
+      // not the persistent game state like score, position, etc.
+      // which the game logic handles internally in the ref.
+      const { 
+        score, xp, xpNext, pos, vel, level, id, color, 
+        ...upgradableStats 
+      } = playerStats as any;
+      
+      playerRef.current = {
+        ...playerRef.current,
+        ...upgradableStats
+      };
+    }
+  }, [playerStats]);
+
+  // Reset on Menu or Game Over
   useEffect(() => {
     if (gameState === 'MENU' || gameState === 'GAME_OVER') {
       // Reset logic
@@ -79,10 +97,8 @@ export const NeonCanvas: React.FC<NeonCanvasProps> = ({
         damage: 10,
         projCount: 1,
       };
-    } else if (playerStats && Object.keys(playerStats).length > 0) {
-      playerRef.current = { ...playerRef.current, ...playerStats as Player };
     }
-  }, [playerStats, gameState]);
+  }, [gameState]);
 
   const enemiesRef = useRef<Enemy[]>([]);
   const bulletsRef = useRef<Bullet[]>([]);
