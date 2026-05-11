@@ -46,6 +46,7 @@ export const NeonCanvas: React.FC<NeonCanvasProps> = ({
     level: 1,
     xp: 0,
     xpNext: 100,
+    score: 0,
     fireRate: 3,
     damage: 10,
     projCount: 1,
@@ -73,6 +74,7 @@ export const NeonCanvas: React.FC<NeonCanvasProps> = ({
         level: 1,
         xp: 0,
         xpNext: 100,
+        score: 0,
         fireRate: 3,
         damage: 10,
         projCount: 1,
@@ -251,7 +253,7 @@ export const NeonCanvas: React.FC<NeonCanvasProps> = ({
 
     // Periodically update score for the UI
     if (frameCountRef.current % 30 === 0 && onScoreUpdate) {
-      onScoreUpdate(Math.floor(p.level * 100 + p.xp));
+      onScoreUpdate(p.score);
     }
 
     // 4. Update Entities
@@ -271,7 +273,7 @@ export const NeonCanvas: React.FC<NeonCanvasProps> = ({
             if (onDamage && frameCountRef.current % 10 === 0) onDamage();
             
             if (p.health <= 0 && gameState === 'PLAYING') {
-                onGameOver(Math.floor(p.level * 100 + p.xp));
+                onGameOver(p.score);
             }
         }
     });
@@ -324,6 +326,7 @@ export const NeonCanvas: React.FC<NeonCanvasProps> = ({
 
         if (d < p.radius + orb.radius) {
             p.xp += orb.value;
+            p.score += orb.value;
             orb.value = 0; // Mark for removal
             if (p.xp >= p.xpNext) {
                 p.level++;

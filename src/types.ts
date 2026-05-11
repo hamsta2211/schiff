@@ -18,6 +18,7 @@ export interface Player extends Entity {
   level: number;
   xp: number;
   xpNext: number;
+  score: number;
   fireRate: number; // bullets per second
   damage: number;
   projCount: number;
