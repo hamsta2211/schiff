@@ -2,10 +2,13 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { NeonCanvas } from './components/NeonCanvas';
 import { Joystick } from './components/Joystick';
+import { SupabaseAuth } from './components/SupabaseAuth';
+import { Leaderboard } from './components/Leaderboard';
+import { supabase } from './lib/supabase';
 import { GameState, Player, Upgrade, Vector } from './types';
 import { getRandomUpgrades } from './upgrades';
 import confetti from 'canvas-confetti';
-import { Shield, Zap, Sword, Heart, Wind, Gamepad2, Info, Maximize2, Minimize2 } from 'lucide-react';
+import { Shield, Zap, Sword, Heart, Wind, Gamepad2, Info, Maximize2, Minimize2, Trophy, User, LogOut } from 'lucide-react';
 
 export default function App() {
   const [gameState, setGameState] = useState<GameState>('MENU');
@@ -17,6 +20,8 @@ export default function App() {
   const [joystickDir, setJoystickDir] = useState<Vector>({ x: 0, y: 0 });
   const [joystickPos, setJoystickPos] = useState<Vector | null>(null);
   const [isTouchDevice, setIsTouchDevice] = useState(false);
+  const [session, setSession] = useState<any>(null);
+  const [username, setUsername] = useState<string>('');
   
   // Track the full state passed from the game to apply upgrades correctly
   const [currentPlayerState, setCurrentPlayerState] = useState<Player | null>(null);
@@ -26,6 +31,21 @@ export default function App() {
   useEffect(() => {
     setIsTouchDevice('ontouchstart' in window || navigator.maxTouchPoints > 0);
     
+    // Auth Check
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      if (session?.user) {
+        setUsername(session.user.user_metadata.username || session.user.email?.split('@')[0] || 'Player');
+      }
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+      if (session?.user) {
+        setUsername(session.user.user_metadata.username || session.user.email?.split('@')[0] || 'Player');
+      }
+    });
+
     const handleFullscreenChange = () => {
       setIsFullscreen(!!document.fullscreenElement);
     };
@@ -85,9 +105,23 @@ export default function App() {
     });
   }, []);
 
-  const handleGameOver = useCallback((finalScore: number) => {
+  const handleGameOver = useCallback(async (finalScore: number) => {
     setGameState('GAME_OVER');
     setScore(finalScore);
+
+    // Save Score to Supabase
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.user) {
+      try {
+        await supabase.from('high_scores').insert({
+          user_id: session.user.id,
+          username: session.user.user_metadata.username || session.user.email?.split('@')[0],
+          score: finalScore,
+        });
+      } catch (err) {
+        console.error('Failed to save score:', err);
+      }
+    }
   }, []);
 
   const applyUpgrade = (upgrade: Upgrade) => {
@@ -136,6 +170,18 @@ export default function App() {
 
       {/* Global Controls */}
       <div className="absolute top-6 right-6 z-[60] flex items-center gap-4">
+        {session && (
+          <div className="flex items-center gap-3 px-4 py-2 bg-white/5 border border-white/10 rounded-xl backdrop-blur-md">
+            <span className="text-sm font-bold text-[#00ccff]">{username}</span>
+            <button 
+              onClick={() => supabase.auth.signOut()}
+              className="p-1 hover:text-[#ff0055] transition-colors"
+              title="Abmelden"
+            >
+              <LogOut size={16} />
+            </button>
+          </div>
+        )}
         <button
           onClick={toggleFullscreen}
           className="p-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl transition-all active:scale-95 group backdrop-blur-md"
@@ -158,15 +204,15 @@ export default function App() {
             initial="hidden"
             animate="visible"
             exit="exit"
-            className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 backdrop-blur-sm z-50 px-6 text-center"
+            className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 backdrop-blur-sm z-50 px-4 md:px-6 text-center overflow-y-auto pt-20"
           >
             <motion.div
               initial={{ y: -50 }}
               animate={{ y: 0 }}
-              className="mb-8"
+              className="mb-8 md:mb-12 shrink-0"
             >
-              <h1 className="text-7xl md:text-9xl font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-br from-[#00ccff] to-[#ff0055] drop-shadow-[0_0_15px_rgba(0,204,255,0.5)]">
-                NEON<br/>SURVIVOR
+              <h1 className="text-6xl md:text-9xl font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-br from-[#00ccff] to-[#ff0055] drop-shadow-[0_0_15px_rgba(0,204,255,0.5)]">
+                SHIFF
               </h1>
             </motion.div>
 
@@ -179,7 +225,24 @@ export default function App() {
                 JETZT SPIELEN
               </button>
               
-              <div className="grid grid-cols-2 gap-3 text-sm font-medium">
+              <div className="grid grid-cols-2 gap-3">
+                <button 
+                  onClick={() => setGameState('LEADERBOARD')}
+                  className="flex items-center justify-center gap-2 p-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg transition-colors font-bold text-sm"
+                >
+                  <Trophy size={16} className="text-[#ff9900]" />
+                  Bestenliste
+                </button>
+                <button 
+                  onClick={() => setGameState('AUTH')}
+                  className="flex items-center justify-center gap-2 p-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg transition-colors font-bold text-sm"
+                >
+                  <User size={16} className="text-[#00ccff]" />
+                  {session ? 'Konto' : 'Anmelden'}
+                </button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 text-[10px] font-bold uppercase tracking-widest text-gray-500 mt-2">
                 <div className="flex items-center gap-2 p-3 bg-white/5 rounded-lg border border-white/10">
                   <Gamepad2 size={16} className="text-[#00ccff]" />
                   <span>WASD zum Bewegen</span>
@@ -259,18 +322,70 @@ export default function App() {
             initial="hidden"
             animate="visible"
             exit="exit"
-            className="absolute inset-0 flex flex-col items-center justify-center bg-black/90 backdrop-blur-sm z-50 px-6 text-center"
+            className="absolute inset-0 flex flex-col items-center justify-center bg-black/90 backdrop-blur-sm z-50 px-6 py-10 text-center overflow-y-auto"
           >
-            <h2 className="text-6xl md:text-8xl font-black mb-4 tracking-tighter text-[#ff0055] drop-shadow-[0_0_15px_rgba(255,0,85,0.5)]">
-              SYSTEMFEHLER
+            <h2 className="text-5xl md:text-8xl font-black mb-4 tracking-tighter text-[#ff0055] drop-shadow-[0_0_15px_rgba(255,0,85,0.5)]">
+              GAME OVER
             </h2>
-            <p className="text-2xl text-gray-400 mb-12">Punktestand: <span className="text-white font-mono">{score}</span></p>
+            <p className="text-2xl text-gray-400 mb-6">Punktestand: <span className="text-white font-mono">{score}</span></p>
             
+            {!session && (
+              <p className="mb-8 p-3 bg-[#ff9900]/10 border border-[#ff9900]/20 rounded-xl text-[#ff9900] text-sm font-bold flex items-center gap-2 max-w-xs mx-auto">
+                <Info size={16} /> Melde dich an, um deinen Highscore zu speichern!
+              </p>
+            )}
+
+            <div className="flex flex-col gap-3 w-full max-w-xs mx-auto">
+              <button 
+                onClick={startGame}
+                className="px-10 py-5 bg-white text-black font-bold text-xl rounded-lg hover:scale-105 active:scale-95 transition-transform"
+              >
+                AGAIN
+              </button>
+              <button 
+                onClick={() => setGameState('MENU')}
+                className="px-10 py-3 bg-white/10 text-white font-bold text-lg rounded-lg hover:bg-white/20 transition-all"
+              >
+                HAUPTMENÜ
+              </button>
+            </div>
+          </motion.div>
+        )}
+
+        {gameState === 'AUTH' && (
+          <motion.div 
+            key="auth"
+            variants={menuVariants}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
+            className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 backdrop-blur-md z-50 px-6"
+          >
+            <SupabaseAuth onAuthSuccess={() => setGameState('MENU')} />
             <button 
-              onClick={startGame}
-              className="px-10 py-5 bg-white text-black font-bold text-xl rounded-lg hover:scale-105 active:scale-95 transition-transform"
+              onClick={() => setGameState('MENU')}
+              className="mt-8 text-sm font-bold uppercase tracking-widest text-[#ff0055] hover:brightness-125 transition-all"
             >
-              SYSTEM NEUSTARTEN
+              Abbrechen
+            </button>
+          </motion.div>
+        )}
+
+        {gameState === 'LEADERBOARD' && (
+          <motion.div 
+            key="leaderboard"
+            variants={menuVariants}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
+            className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 backdrop-blur-md z-50 px-4 md:px-6 py-10 overflow-y-auto"
+          >
+            <Leaderboard />
+            <button 
+              onClick={() => setGameState('MENU')}
+              className="my-10 px-8 py-3 bg-white text-black font-black uppercase tracking-widest rounded-xl hover:scale-105 transition-all shadow-[0_0_20px_rgba(255,255,255,0.2)]"
+            >
+              Schließen
             </button>
           </motion.div>
         )}
