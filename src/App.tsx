@@ -15,6 +15,7 @@ export default function App() {
   const [isShaking, setIsShaking] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [joystickDir, setJoystickDir] = useState<Vector>({ x: 0, y: 0 });
+  const [joystickPos, setJoystickPos] = useState<Vector | null>(null);
   const [isTouchDevice, setIsTouchDevice] = useState(false);
   
   // Track the full state passed from the game to apply upgrades correctly
@@ -31,6 +32,20 @@ export default function App() {
     document.addEventListener('fullscreenchange', handleFullscreenChange);
     return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
   }, []);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (gameState !== 'PLAYING') return;
+    // Don't trigger if touching a button
+    if ((e.target as HTMLElement).closest('button')) return;
+
+    const touch = e.touches[0];
+    setJoystickPos({ x: touch.clientX, y: touch.clientY });
+  };
+
+  const handleTouchEnd = () => {
+    setJoystickPos(null);
+    setJoystickDir({ x: 0, y: 0 });
+  };
 
   const toggleFullscreen = () => {
     if (!containerRef.current) return;
@@ -98,6 +113,7 @@ export default function App() {
     <div 
       ref={containerRef}
       className={`relative w-screen h-screen bg-[#050a14] overflow-hidden font-sans text-white ${isShaking ? 'shake' : ''}`}
+      onTouchStart={handleTouchStart}
     >
       {/* Game Canvas */}
       <NeonCanvas 
@@ -110,10 +126,12 @@ export default function App() {
       />
 
       {/* Joystick for Mobile */}
-      {gameState === 'PLAYING' && isTouchDevice && (
-        <div className="absolute bottom-10 left-10 z-[60]">
-          <Joystick onMove={setJoystickDir} />
-        </div>
+      {gameState === 'PLAYING' && joystickPos && (
+        <Joystick 
+          position={joystickPos} 
+          onMove={setJoystickDir} 
+          onEnd={handleTouchEnd}
+        />
       )}
 
       {/* Global Controls */}
