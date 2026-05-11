@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { NeonCanvas } from './components/NeonCanvas';
 import { Joystick } from './components/Joystick';
@@ -8,7 +8,7 @@ import { supabase, isSupabaseConfigured } from './lib/supabase';
 import { GameState, Player, Upgrade, Vector } from './types';
 import { getRandomUpgrades } from './upgrades';
 import confetti from 'canvas-confetti';
-import { Shield, Zap, Sword, Heart, Wind, Gamepad2, Info, Maximize2, Minimize2, Trophy, User, LogOut } from 'lucide-react';
+import { Shield, Zap, Sword, Heart, Wind, Gamepad2, Info, Maximize2, Minimize2, Trophy, User, LogOut, Pause, Play, Home } from 'lucide-react';
 
 export default function App() {
   const [gameState, setGameState] = useState<GameState>('MENU');
@@ -23,8 +23,8 @@ export default function App() {
   const [session, setSession] = useState<any>(null);
   const [username, setUsername] = useState<string>('');
   const [personalHighScore, setPersonalHighScore] = useState<number>(0);
+  const [lastScore, setLastScore] = useState(0); 
   
-  // Track the full state passed from the game to apply upgrades correctly
   const [currentPlayerState, setCurrentPlayerState] = useState<Player | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -52,7 +52,6 @@ export default function App() {
     setIsTouchDevice('ontouchstart' in window || navigator.maxTouchPoints > 0);
     
     if (isSupabaseConfigured) {
-      // Auth Check
       supabase.auth.getSession().then(({ data: { session } }) => {
         setSession(session);
         if (session?.user) {
@@ -76,22 +75,50 @@ export default function App() {
       };
       document.addEventListener('fullscreenchange', handleFullscreenChange);
 
+      const handleKeyDown = (e: KeyboardEvent) => {
+        if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') {
+          setGameState(prev => {
+            if (prev === 'PLAYING') return 'PAUSED';
+            if (prev === 'PAUSED') return 'PLAYING';
+            return prev;
+          });
+        }
+      };
+
+      window.addEventListener('keydown', handleKeyDown);
+
       return () => {
         subscription.unsubscribe();
         document.removeEventListener('fullscreenchange', handleFullscreenChange);
+        window.removeEventListener('keydown', handleKeyDown);
       };
     } else {
       const handleFullscreenChange = () => {
         setIsFullscreen(!!document.fullscreenElement);
       };
       document.addEventListener('fullscreenchange', handleFullscreenChange);
-      return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+
+      const handleKeyDown = (e: KeyboardEvent) => {
+        if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') {
+          setGameState(prev => {
+            if (prev === 'PLAYING') return 'PAUSED';
+            if (prev === 'PAUSED') return 'PLAYING';
+            return prev;
+          });
+        }
+      };
+
+      window.addEventListener('keydown', handleKeyDown);
+
+      return () => {
+        document.removeEventListener('fullscreenchange', handleFullscreenChange);
+        window.removeEventListener('keydown', handleKeyDown);
+      };
     }
   }, []);
 
   const handleTouchStart = (e: React.TouchEvent) => {
     if (gameState !== 'PLAYING') return;
-    // Don't trigger if touching a button
     if ((e.target as HTMLElement).closest('button')) return;
 
     const touch = e.touches[0];
@@ -127,6 +154,7 @@ export default function App() {
     setPlayerStats({});
     setCurrentPlayerState(null);
     setScore(0);
+    setLastScore(0);
   };
 
   const handleLevelUp = useCallback((player: Player) => {
@@ -141,11 +169,7 @@ export default function App() {
     });
   }, []);
 
-  const handleGameOver = useCallback(async (finalScore: number) => {
-    setGameState('GAME_OVER');
-    setScore(finalScore);
-
-    // Save Score to Supabase
+  const saveScoreToSupabase = async (finalScore: number) => {
     if (isSupabaseConfigured) {
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
@@ -155,7 +179,6 @@ export default function App() {
             username: session.user.user_metadata.username || session.user.email?.split('@')[0],
             score: finalScore,
           });
-          // Update personal high score if needed
           if (finalScore > personalHighScore) {
             setPersonalHighScore(finalScore);
           }
@@ -164,7 +187,21 @@ export default function App() {
         }
       }
     }
+  };
+
+  const handleGameOver = useCallback(async (finalScore: number) => {
+    setGameState('GAME_OVER');
+    setScore(finalScore);
+    setLastScore(finalScore);
+    await saveScoreToSupabase(finalScore);
   }, [personalHighScore]);
+
+  const handleQuitAndSave = async (currentScore: number) => {
+    setGameState('MENU');
+    setScore(0);
+    await saveScoreToSupabase(currentScore);
+  };
+
 
   const applyUpgrade = (upgrade: Upgrade) => {
     setPlayerStats((prev) => {
@@ -196,6 +233,7 @@ export default function App() {
         gameState={gameState} 
         onLevelUp={handleLevelUp} 
         onGameOver={handleGameOver}
+        onScoreUpdate={setScore}
         onDamage={triggerShake}
         playerStats={playerStats}
         joystickDir={joystickDir}
@@ -212,6 +250,15 @@ export default function App() {
 
       {/* Global Controls */}
       <div className="absolute top-6 right-6 z-[60] flex items-center gap-4">
+        {gameState === 'PLAYING' && (
+          <button
+            onClick={() => setGameState('PAUSED')}
+            className="p-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl transition-all active:scale-95 group backdrop-blur-md"
+            title="Pause"
+          >
+            <Pause size={20} className="text-white group-hover:text-[#00ccff] transition-colors" />
+          </button>
+        )}
         {session && (
           <div className="flex items-center gap-3 px-4 py-2 bg-white/5 border border-white/10 rounded-xl backdrop-blur-md">
             <span className="text-sm font-bold text-[#00ccff]">{username}</span>
@@ -239,6 +286,43 @@ export default function App() {
 
       {/* Overlay UI */}
       <AnimatePresence>
+        {gameState === 'PAUSED' && (
+          <motion.div 
+            key="paused"
+            variants={menuVariants}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
+            className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 backdrop-blur-md z-50 px-6 py-10 text-center"
+          >
+            <h2 className="text-5xl md:text-8xl font-black mb-8 tracking-tighter text-[#00ccff] drop-shadow-[0_0_15px_rgba(0,204,255,0.5)]">
+              PAUSE
+            </h2>
+            
+            <div className="flex flex-col gap-4 w-full max-w-xs mx-auto">
+              <button 
+                onClick={() => setGameState('PLAYING')}
+                className="group relative px-10 py-5 bg-[#00ccff] text-[#050a14] font-bold text-2xl rounded-lg overflow-hidden transition-all hover:scale-105 active:scale-95 shadow-[0_0_20px_rgba(0,204,255,0.4)] flex items-center justify-center gap-3"
+              >
+                <Play size={24} fill="currentColor" />
+                WEITER
+              </button>
+              
+              <button 
+                onClick={() => handleQuitAndSave(score)}
+                className="px-10 py-4 bg-white/10 text-white font-bold text-lg rounded-lg hover:bg-white/20 transition-all flex items-center justify-center gap-3 border border-white/10"
+              >
+                <Home size={20} />
+                BEENDEN & SPEICHERN
+              </button>
+            </div>
+            
+            <div className="mt-12 p-4 bg-white/5 border border-white/10 rounded-xl">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-1">Aktueller Score</p>
+              <p className="text-3xl font-black text-white font-mono">{score}</p>
+            </div>
+          </motion.div>
+        )}
         {gameState === 'MENU' && (
           <motion.div 
             key="menu"

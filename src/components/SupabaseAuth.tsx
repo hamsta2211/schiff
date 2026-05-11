@@ -89,17 +89,11 @@ export const SupabaseAuth: React.FC<SupabaseAuthProps> = ({ onAuthSuccess }) => 
         provider: 'google',
         options: {
           redirectTo: window.location.origin,
-          skipBrowserRedirect: true
+          skipBrowserRedirect: false // Wir nutzen jetzt den direkten Redirect, da das zuverlässiger ist wenn die Site URL stimmt
         }
       });
       
       if (error) throw error;
-      
-      if (data?.url) {
-        // Wir öffnen Google Login in einem neuen Fenster, um Iframe-Probleme zu vermeiden
-        window.open(data.url, '_blank');
-        setError('Google Login wurde in einem neuen Tab geöffnet. Sobald du dich angemeldet hast, kannst du hier weitermachen.');
-      }
     } catch (err: any) {
       setError(err.message);
     } finally {

@@ -5,6 +5,7 @@ interface NeonCanvasProps {
   gameState: GameState;
   onLevelUp: (player: Player) => void;
   onGameOver: (score: number) => void;
+  onScoreUpdate?: (score: number) => void;
   onDamage?: () => void;
   playerStats: Partial<Player>;
   joystickDir?: Vector;
@@ -24,6 +25,7 @@ export const NeonCanvas: React.FC<NeonCanvasProps> = ({
   gameState, 
   onLevelUp, 
   onGameOver,
+  onScoreUpdate,
   onDamage,
   playerStats,
   joystickDir
@@ -154,7 +156,7 @@ export const NeonCanvas: React.FC<NeonCanvasProps> = ({
   };
 
   const gameLoop = useCallback((time: number) => {
-    if (gameState !== 'PLAYING') {
+    if (gameState !== 'PLAYING' && gameState !== 'PAUSED') {
       requestRef.current = requestAnimationFrame(gameLoop);
       return;
     }
@@ -165,11 +167,13 @@ export const NeonCanvas: React.FC<NeonCanvasProps> = ({
     if (!ctx) return;
 
     const { width, height } = canvas;
-    frameCountRef.current++;
-
-    // 1. Update Player
     const p = playerRef.current;
-    let dx = 0, dy = 0;
+    
+    if (gameState === 'PLAYING') {
+      frameCountRef.current++;
+
+      // 1. Update Player
+      let dx = 0, dy = 0;
     
     // Keyboard Input
     if (keysRef.current.has('KeyW') || keysRef.current.has('ArrowUp')) dy -= 1;
@@ -243,6 +247,11 @@ export const NeonCanvas: React.FC<NeonCanvasProps> = ({
     if (spawnTimerRef.current <= 0) {
       spawnEnemy(width, height);
       spawnTimerRef.current = Math.max(10, 60 - p.level * 2);
+    }
+
+    // Periodically update score for the UI
+    if (frameCountRef.current % 30 === 0 && onScoreUpdate) {
+      onScoreUpdate(Math.floor(p.level * 100 + p.xp));
     }
 
     // 4. Update Entities
@@ -334,6 +343,7 @@ export const NeonCanvas: React.FC<NeonCanvasProps> = ({
         part.opacity = part.life;
     });
     particlesRef.current = particlesRef.current.filter(p => p.life > 0);
+    }
 
     // 5. Draw
     ctx.fillStyle = COLORS.background;
@@ -436,7 +446,7 @@ export const NeonCanvas: React.FC<NeonCanvasProps> = ({
     ctx.fillText(`LVL ${p.level}`, 20, 65);
 
     requestRef.current = requestAnimationFrame(gameLoop);
-  }, [gameState, onGameOver, onLevelUp, onDamage, spawnEnemy]); // Removed joystickDir to stabilize loop
+  }, [gameState, onGameOver, onLevelUp, onScoreUpdate, onDamage, spawnEnemy]); // Removed joystickDir to stabilize loop
 
   useEffect(() => {
     requestRef.current = requestAnimationFrame(gameLoop);
