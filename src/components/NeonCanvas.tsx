@@ -8,8 +8,11 @@ interface NeonCanvasProps {
   onScoreUpdate?: (score: number) => void;
   onStatsUpdate?: (stats: { health: number; maxHealth: number; level: number; xp: number; xpNext: number }) => void;
   onDamage?: () => void;
+  onBossStart?: () => void;
+  onBossEnd?: () => void;
   playerStats: Partial<Player>;
   joystickDir?: Vector;
+  startLevel?: number;
 }
 
 const COLORS = {
@@ -29,8 +32,11 @@ export const NeonCanvas: React.FC<NeonCanvasProps> = ({
   onScoreUpdate,
   onStatsUpdate,
   onDamage,
+  onBossStart,
+  onBossEnd,
   playerStats,
-  joystickDir
+  joystickDir,
+  startLevel = 1
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const requestRef = useRef<number>(null);
@@ -42,16 +48,16 @@ export const NeonCanvas: React.FC<NeonCanvasProps> = ({
     vel: { x: 0, y: 0 },
     radius: 12,
     color: COLORS.player,
-    health: 100,
-    maxHealth: 100,
-    speed: 4,
-    level: 1,
+    health: 100 + (Math.max(1, startLevel) - 1) * 20,
+    maxHealth: 100 + (Math.max(1, startLevel) - 1) * 20,
+    speed: 4 + (Math.max(1, startLevel) > 5 ? 1 : 0),
+    level: Math.max(1, startLevel),
     xp: 0,
-    xpNext: 100,
+    xpNext: 100 * Math.max(1, startLevel),
     score: 0,
-    fireRate: 3,
-    damage: 10,
-    projCount: 1,
+    fireRate: 3 + (Math.max(1, startLevel) - 1) * 0.5,
+    damage: 10 + (Math.max(1, startLevel) - 1) * 5,
+    projCount: 1 + Math.floor((Math.max(1, startLevel) - 1) / 3),
   });
 
   // Sync player stats from props (Level Up rewards)
@@ -77,6 +83,8 @@ export const NeonCanvas: React.FC<NeonCanvasProps> = ({
     if (gameState === 'MENU' || gameState === 'GAME_OVER') {
       // Reset logic
       enemiesRef.current = [];
+      bossRef.current = null;
+      lastBossSpawnLevelRef.current = -1;
       bulletsRef.current = [];
       xpOrbsRef.current = [];
       particlesRef.current = [];
@@ -88,29 +96,33 @@ export const NeonCanvas: React.FC<NeonCanvasProps> = ({
         vel: { x: 0, y: 0 },
         radius: 12,
         color: COLORS.player,
-        health: 100,
-        maxHealth: 100,
-        speed: 4,
-        level: 1,
+        health: 100 + (startLevel - 1) * 20,
+        maxHealth: 100 + (startLevel - 1) * 20,
+        speed: 4 + (startLevel > 5 ? 1 : 0),
+        level: startLevel,
         xp: 0,
-        xpNext: 100,
+        xpNext: 100 * startLevel,
         score: 0,
-        fireRate: 3,
-        damage: 10,
-        projCount: 1,
+        fireRate: 3 + (startLevel - 1) * 0.5,
+        damage: 10 + (startLevel - 1) * 5,
+        projCount: 1 + Math.floor((startLevel - 1) / 3),
       };
     }
-  }, [gameState]);
+  }, [gameState, startLevel]);
 
   const enemiesRef = useRef<Enemy[]>([]);
+  const bossRef = useRef<Enemy | null>(null);
+  const lastBossSpawnLevelRef = useRef<number>(-1);
   const bulletsRef = useRef<Bullet[]>([]);
   const xpOrbsRef = useRef<XPOrb[]>([]);
   const particlesRef = useRef<Particle[]>([]);
   const keysRef = useRef<Set<string>>(new Set());
   const lastFireRef = useRef<number>(0);
+  const lastBossFireRef = useRef<number>(0);
   const spawnTimerRef = useRef<number>(0);
   const frameCountRef = useRef<number>(0);
   const joystickDirRef = useRef<Vector>({ x: 0, y: 0 });
+  const arenaTransitionRef = useRef(0);
 
   // Update joystick ref whenever prop changes
   useEffect(() => {
@@ -158,6 +170,22 @@ export const NeonCanvas: React.FC<NeonCanvasProps> = ({
     });
   }, []);
 
+  const spawnBoss = useCallback((width: number, height: number) => {
+    const level = playerRef.current.level;
+    bossRef.current = {
+      id: 'boss-' + level,
+      pos: { x: width / 2, y: -100 },
+      vel: { x: 0, y: 0 },
+      radius: 40,
+      color: '#ff00ff',
+      health: 1000 + level * 200,
+      maxHealth: 1000 + level * 200,
+      speed: 1,
+      damage: 25,
+      value: 500,
+    };
+  }, []);
+
   const createExplosion = (pos: Vector, color: string, count: number = 10) => {
     for (let i = 0; i < count; i++) {
         const angle = Math.random() * Math.PI * 2;
@@ -176,7 +204,7 @@ export const NeonCanvas: React.FC<NeonCanvasProps> = ({
   };
 
   const gameLoop = useCallback((time: number) => {
-    if (gameState !== 'PLAYING' && gameState !== 'PAUSED') {
+    if (gameState !== 'PLAYING' && gameState !== 'BOSS_INTRO' && gameState !== 'BOSS_FIGHT' && gameState !== 'PAUSED') {
       requestRef.current = requestAnimationFrame(gameLoop);
       return;
     }
@@ -189,8 +217,17 @@ export const NeonCanvas: React.FC<NeonCanvasProps> = ({
     const { width, height } = canvas;
     const p = playerRef.current;
     
-    if (gameState === 'PLAYING') {
+    if (gameState === 'PLAYING' || gameState === 'BOSS_INTRO' || gameState === 'BOSS_FIGHT') {
       frameCountRef.current++;
+
+      // Boss milestone detection
+      const isBossMilestone = p.level > 0 && p.level % 10 === 0;
+      if (gameState === 'PLAYING' && isBossMilestone && !bossRef.current && p.level !== lastBossSpawnLevelRef.current) {
+        lastBossSpawnLevelRef.current = p.level;
+        if (onBossStart) onBossStart();
+        enemiesRef.current = []; // Clear small fry
+        spawnBoss(width, height);
+      }
 
       // 1. Update Player
       let dx = 0, dy = 0;
@@ -209,7 +246,6 @@ export const NeonCanvas: React.FC<NeonCanvasProps> = ({
     }
 
     if (dx !== 0 || dy !== 0) {
-      // If using binary keyboard input, normalize. If using joystick, use analog.
       if (jDir.x === 0 && jDir.y === 0) {
         const mag = Math.sqrt(dx * dx + dy * dy);
         dx /= mag;
@@ -219,30 +255,32 @@ export const NeonCanvas: React.FC<NeonCanvasProps> = ({
       p.pos.y += dy * p.speed;
     }
 
-    // Wrap/Clamp player
     p.pos.x = Math.max(p.radius, Math.min(width - p.radius, p.pos.x));
     p.pos.y = Math.max(p.radius, Math.min(height - p.radius, p.pos.y));
 
-    // 2. Firing Logic (Auto-aim at nearest enemy)
+    // 2. Firing Logic
     const now = Date.now();
-    if (now - lastFireRef.current > 1000 / p.fireRate && enemiesRef.current.length > 0) {
+    const hasTargets = enemiesRef.current.length > 0 || bossRef.current;
+    if (now - lastFireRef.current > 1000 / p.fireRate && hasTargets) {
       lastFireRef.current = now;
       
-      // Find nearest enemy
-      let nearest: Enemy | null = null;
+      let nearest: Entity | null = null;
       let minDist = Infinity;
-      for (const e of enemiesRef.current) {
-        const d = Math.sqrt((e.pos.x - p.pos.x)**2 + (e.pos.y - p.pos.y)**2);
-        if (d < minDist) {
-          minDist = d;
-          nearest = e;
+      
+      if (bossRef.current) {
+        nearest = bossRef.current;
+      } else {
+        for (const e of enemiesRef.current) {
+          const d = Math.sqrt((e.pos.x - p.pos.x)**2 + (e.pos.y - p.pos.y)**2);
+          if (d < minDist) {
+            minDist = d;
+            nearest = e;
+          }
         }
       }
 
       if (nearest) {
         const angle = Math.atan2(nearest.pos.y - p.pos.y, nearest.pos.x - p.pos.x);
-        
-        // Shoot multi-projectiles
         const spread = 0.2;
         const baseAngle = angle - ((p.projCount - 1) * spread) / 2;
 
@@ -263,13 +301,54 @@ export const NeonCanvas: React.FC<NeonCanvasProps> = ({
     }
 
     // 3. Spawning
-    spawnTimerRef.current--;
-    if (spawnTimerRef.current <= 0) {
-      spawnEnemy(width, height);
-      spawnTimerRef.current = Math.max(10, 60 - p.level * 2);
+    if (gameState === 'PLAYING') {
+      spawnTimerRef.current--;
+      if (spawnTimerRef.current <= 0) {
+        spawnEnemy(width, height);
+        spawnTimerRef.current = Math.max(10, 60 - p.level * 2);
+      }
     }
 
-    // Periodically update score and stats for the UI
+    // Arena Transition Logic
+    if (gameState === 'BOSS_INTRO' || gameState === 'BOSS_FIGHT') {
+      arenaTransitionRef.current = Math.min(1, arenaTransitionRef.current + 0.01);
+    } else {
+      arenaTransitionRef.current = Math.max(0, arenaTransitionRef.current - 0.01);
+    }
+
+    // Boss Behavior
+    if (bossRef.current) {
+      const b = bossRef.current;
+      // Hover at top with sine wave
+      const targetX = width / 2 + Math.sin(frameCountRef.current * 0.02) * (width * 0.3);
+      const targetY = 150 + Math.cos(frameCountRef.current * 0.01) * 50;
+      
+      b.pos.x += (targetX - b.pos.x) * 0.02;
+      b.pos.y += (targetY - b.pos.y) * 0.02;
+
+      // Boss pattern: Circular burst every 2.5 seconds
+      if (now - lastBossFireRef.current > 2500) {
+        lastBossFireRef.current = now;
+        const bulletCount = 8 + Math.floor(p.level / 5);
+        for(let i=0; i<bulletCount; i++) {
+          const angle = (Math.PI * 2 / bulletCount) * i + (frameCountRef.current * 0.1);
+          enemiesRef.current.push({
+            id: 'boss-bullet-' + Math.random(),
+            pos: { ...b.pos },
+            vel: { x: Math.cos(angle) * 3, y: Math.sin(angle) * 3 },
+            radius: 8,
+            color: '#ff00ff',
+            health: 1,
+            maxHealth: 1,
+            speed: 3,
+            damage: 5,
+            value: 0
+          });
+        }
+      }
+    }
+
+    // Periodically update score and stats
     if (frameCountRef.current % 10 === 0) {
       if (onScoreUpdate) onScoreUpdate(p.score);
       if (onStatsUpdate) {
@@ -284,24 +363,23 @@ export const NeonCanvas: React.FC<NeonCanvasProps> = ({
     }
 
     // 4. Update Entities
-    // Enemies
     enemiesRef.current.forEach(e => {
-        const angle = Math.atan2(p.pos.y - e.pos.y, p.pos.x - e.pos.x);
-        e.vel.x = Math.cos(angle) * e.speed;
-        e.vel.y = Math.sin(angle) * e.speed;
+        // Boss bullets move straight, regular enemies home in
+        if (e.value > 0) {
+          const angle = Math.atan2(p.pos.y - e.pos.y, p.pos.x - e.pos.x);
+          e.vel.x = Math.cos(angle) * e.speed;
+          e.vel.y = Math.sin(angle) * e.speed;
+        }
         e.pos.x += e.vel.x;
         e.pos.y += e.vel.y;
 
-        // Player Collision
         const d = Math.sqrt((e.pos.x - p.pos.x)**2 + (e.pos.y - p.pos.y)**2);
         if (d < e.radius + p.radius) {
-            const damage = e.damage / 60;
+            const damage = e.damage / (e.value === 0 ? 1 : 60);
             p.health -= damage;
+            if (e.value === 0) e.health = 0; // Boss bullet disappears
             if (onDamage && frameCountRef.current % 10 === 0) onDamage();
-            
-            if (p.health <= 0 && gameState === 'PLAYING') {
-                onGameOver(p.score);
-            }
+            if (p.health <= 0) onGameOver(p.score);
         }
     });
 
@@ -316,10 +394,9 @@ export const NeonCanvas: React.FC<NeonCanvasProps> = ({
             const d = Math.sqrt((e.pos.x - b.pos.x)**2 + (e.pos.y - b.pos.y)**2);
             if (d < e.radius + b.radius) {
                 e.health -= b.damage;
-                b.distanceTraveled = b.maxDistance + 1; // Mark for removal
+                b.distanceTraveled = b.maxDistance + 1;
                 
-                if (e.health <= 0) {
-                    // Kill effects
+                if (e.health <= 0 && e.value > 0) {
                     createExplosion(e.pos, e.color);
                     xpOrbsRef.current.push({
                         id: Math.random().toString(),
@@ -332,29 +409,63 @@ export const NeonCanvas: React.FC<NeonCanvasProps> = ({
                 }
             }
         });
-    });
 
-    // Cleanup Bullets & Dead Enemies
+        // Boss Collision
+        if (bossRef.current) {
+          const b = bossRef.current;
+          const d = Math.sqrt((b.pos.x - b.pos.x)**2 + (b.pos.y - b.pos.y)**2); // Typo check: b.pos and b.pos? No, b.pos and b.pos is wrong.
+        }
+    });
+    
+    // Fix Boss collision separately
+    if (bossRef.current) {
+      const b = bossRef.current;
+      bulletsRef.current.forEach(bull => {
+        const d = Math.sqrt((b.pos.x - bull.pos.x)**2 + (b.pos.y - bull.pos.y)**2);
+        if (d < b.radius + bull.radius) {
+          b.health -= bull.damage;
+          bull.distanceTraveled = bull.maxDistance + 1;
+          if (b.health <= 0) {
+            createExplosion(b.pos, b.color, 50);
+            p.score += b.value;
+            // Large XP reward
+            for(let i=0; i<15; i++) {
+              xpOrbsRef.current.push({
+                id: 'orb-' + Math.random(),
+                pos: { x: b.pos.x + (Math.random()-0.5)*50, y: b.pos.y + (Math.random()-0.5)*50 },
+                vel: { x: (Math.random()-0.5)*10, y: (Math.random()-0.5)*10 },
+                radius: 8,
+                color: COLORS.xp,
+                value: b.value / 15
+              });
+            }
+            bossRef.current = null;
+            if (onBossEnd) onBossEnd();
+          }
+        }
+      });
+    }
+
     bulletsRef.current = bulletsRef.current.filter(b => b.distanceTraveled < b.maxDistance);
     enemiesRef.current = enemiesRef.current.filter(e => e.health > 0);
 
     // XP Orbs
     xpOrbsRef.current.forEach(orb => {
         const d = Math.sqrt((orb.pos.x - p.pos.x)**2 + (orb.pos.y - p.pos.y)**2);
-        if (d < 150) { // Magnet effect
+        if (d < 150) { 
             const angle = Math.atan2(p.pos.y - orb.pos.y, p.pos.x - orb.pos.x);
             orb.vel.x += Math.cos(angle) * 0.5;
             orb.vel.y += Math.sin(angle) * 0.5;
         }
         orb.pos.x += orb.vel.x;
         orb.pos.y += orb.vel.y;
-        orb.vel.x *= 0.95; // Friction
+        orb.vel.x *= 0.95; 
         orb.vel.y *= 0.95;
 
         if (d < p.radius + orb.radius) {
             p.xp += orb.value;
             p.score += orb.value;
-            orb.value = 0; // Mark for removal
+            orb.value = 0; 
             if (p.xp >= p.xpNext) {
                 p.level++;
                 p.xp -= p.xpNext;
@@ -376,11 +487,17 @@ export const NeonCanvas: React.FC<NeonCanvasProps> = ({
     }
 
     // 5. Draw
-    ctx.fillStyle = COLORS.background;
+    // Background with Arena Effect
+    const baseColor = { r: 5, g: 10, b: 20 };
+    const arenaColor = { r: 40, g: 5, b: 40 };
+    const r = Math.floor(baseColor.r + (arenaColor.r - baseColor.r) * arenaTransitionRef.current);
+    const g = Math.floor(baseColor.g + (arenaColor.g - baseColor.g) * arenaTransitionRef.current);
+    const b = Math.floor(baseColor.b + (arenaColor.b - baseColor.b) * arenaTransitionRef.current);
+    ctx.fillStyle = `rgb(${r},${g},${b})`;
     ctx.fillRect(0, 0, width, height);
 
-    // Draw Grid
-    ctx.strokeStyle = COLORS.grid;
+    // Grid
+    ctx.strokeStyle = arenaTransitionRef.current > 0.5 ? '#ff00ff44' : COLORS.grid;
     ctx.lineWidth = 1;
     const gridSize = 50;
     const offsetX = -(p.pos.x % gridSize);
@@ -397,7 +514,18 @@ export const NeonCanvas: React.FC<NeonCanvasProps> = ({
     }
     ctx.stroke();
 
-    // Draw Entities with Glow
+    if (arenaTransitionRef.current > 0) {
+      // Warp lines
+      ctx.strokeStyle = `rgba(255, 0, 255, ${arenaTransitionRef.current * 0.1})`;
+      ctx.beginPath();
+      for(let i=0; i<width; i+=100) {
+        const x = (i + frameCountRef.current * 10) % width;
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, height);
+      }
+      ctx.stroke();
+    }
+
     ctx.shadowBlur = 15;
 
     // Bullets
@@ -423,7 +551,6 @@ export const NeonCanvas: React.FC<NeonCanvasProps> = ({
         ctx.shadowColor = e.color;
         ctx.fillStyle = e.color;
         ctx.beginPath();
-        // Triangle/Square based on type
         if (e.radius > 15) { // Elite
             ctx.rect(e.pos.x - e.radius, e.pos.y - e.radius, e.radius*2, e.radius*2);
         } else {
@@ -431,6 +558,42 @@ export const NeonCanvas: React.FC<NeonCanvasProps> = ({
         }
         ctx.fill();
     });
+
+    // Boss
+    if (bossRef.current) {
+      const b = bossRef.current;
+      ctx.shadowBlur = 25;
+      ctx.shadowColor = b.color;
+      ctx.fillStyle = b.color;
+      
+      const segments = 8;
+      const angleStep = (Math.PI * 2) / segments;
+      const t = frameCountRef.current * 0.05;
+      
+      ctx.beginPath();
+      for (let i = 0; i < segments; i++) {
+        const angle = i * angleStep + t;
+        const rad = b.radius + Math.sin(t * 3 + i) * 10;
+        const x = b.pos.x + Math.cos(angle) * rad;
+        const y = b.pos.y + Math.sin(angle) * rad;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.closePath();
+      ctx.fill();
+
+      // Boss Health
+      const hpWidth = 300;
+      const bx = b.pos.x - hpWidth / 2;
+      const by = b.pos.y - b.radius - 40;
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = 'rgba(0,0,0,0.5)';
+      ctx.fillRect(bx, by, hpWidth, 8);
+      ctx.fillStyle = '#ff00ff';
+      ctx.fillRect(bx, by, (b.health / b.maxHealth) * hpWidth, 8);
+      ctx.strokeStyle = '#fff';
+      ctx.strokeRect(bx, by, hpWidth, 8);
+    }
 
     // Particles
     particlesRef.current.forEach(part => {
@@ -453,9 +616,8 @@ export const NeonCanvas: React.FC<NeonCanvasProps> = ({
     ctx.closePath();
     ctx.fill();
 
-    // All drawing and HUD logic is now handled in React or earlier in loop
     requestRef.current = requestAnimationFrame(gameLoop);
-  }, [gameState, onGameOver, onLevelUp, onScoreUpdate, onStatsUpdate, onDamage, spawnEnemy]); // Removed joystickDir to stabilize loop
+  }, [gameState, onGameOver, onLevelUp, onScoreUpdate, onStatsUpdate, onDamage, spawnEnemy, spawnBoss]); // Removed joystickDir to stabilize loop
 
   useEffect(() => {
     requestRef.current = requestAnimationFrame(gameLoop);

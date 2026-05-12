@@ -3,7 +3,17 @@ import { motion } from 'motion/react';
 import { supabase } from '../lib/supabase';
 import { Shield, Trash2, User, Mail, Clock, CheckCircle, AlertCircle, Loader2, X } from 'lucide-react';
 
-export function AdminPanel({ onClose }: { onClose: () => void }) {
+export function AdminPanel({ 
+  onClose,
+  startLevel,
+  onSetStartLevel,
+  isAdmin
+}: { 
+  onClose: () => void;
+  startLevel?: number;
+  onSetStartLevel?: (v: number) => void;
+  isAdmin?: boolean;
+}) {
   const [requests, setRequests] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [processingId, setProcessingId] = useState<string | null>(null);
@@ -78,13 +88,40 @@ export function AdminPanel({ onClose }: { onClose: () => void }) {
         </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto custom-scrollbar pr-2">
-        {loading ? (
-          <div className="flex justify-center py-20">
+      <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 space-y-6 md:space-y-8">
+        
+        {isAdmin && (
+          <div className="bg-white/5 border border-white/10 rounded-2xl p-4 md:p-6">
+            <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
+              <Shield size={20} className="text-[#00ccff]" />
+              Dev Settings
+            </h3>
+            <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+              <label className="text-gray-400 font-medium whitespace-nowrap">Start Level:</label>
+              <input 
+                type="number" 
+                min="1" 
+                max="100" 
+                value={startLevel || 1} 
+                onChange={(e) => onSetStartLevel && onSetStartLevel(parseInt(e.target.value) || 1)}
+                className="bg-black/50 border border-white/10 rounded-lg px-4 py-2 w-full sm:w-24 text-white focus:outline-none focus:border-[#00ccff]"
+              />
+              <span className="text-sm text-gray-500">(Setze auf 9 für Boss auf Start)</span>
+            </div>
+          </div>
+        )}
+
+        <div>
+          <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
+            <Trash2 size={20} className="text-[#ff0055]" />
+            Löschungsanfragen
+          </h3>
+          {loading ? (
+          <div className="flex justify-center py-10 md:py-20">
             <Loader2 className="animate-spin text-[#ff0055] w-12 h-12" />
           </div>
         ) : requests.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 text-center opacity-50">
+          <div className="flex flex-col items-center justify-center py-10 md:py-20 text-center opacity-50">
             <CheckCircle size={48} className="text-green-500 mb-4" />
             <p className="text-xl font-bold">Alles erledigt!</p>
             <p className="text-gray-400">Momentan liegen keine Löschungsanfragen vor.</p>
@@ -96,7 +133,7 @@ export function AdminPanel({ onClose }: { onClose: () => void }) {
                 key={req.id}
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="p-6 bg-white/5 border border-white/10 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-6"
+                className="p-4 md:p-6 bg-white/5 border border-white/10 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4 md:gap-6"
               >
                 <div className="space-y-2">
                   <div className="flex items-center gap-3">
@@ -105,7 +142,7 @@ export function AdminPanel({ onClose }: { onClose: () => void }) {
                   </div>
                   <div className="flex items-center gap-3 text-gray-400">
                     <Mail size={16} />
-                    <span className="text-sm">{req.email}</span>
+                    <span className="text-sm break-all">{req.email}</span>
                   </div>
                   <div className="flex items-center gap-3 text-gray-500 text-xs">
                     <Clock size={14} />
@@ -127,14 +164,15 @@ export function AdminPanel({ onClose }: { onClose: () => void }) {
             ))}
           </div>
         )}
-      </div>
+        </div>
 
-      <div className="mt-8 pt-6 border-t border-white/10 shrink-0">
-        <div className="flex items-start gap-3 p-4 bg-orange-500/10 border border-orange-500/20 rounded-2xl">
-          <AlertCircle className="text-orange-500 shrink-0 mt-0.5" size={18} />
-          <p className="text-xs text-orange-200 leading-relaxed font-medium">
-            Hinweis: Das Löschen der Highscores erfolgt sofort. Die eigentliche Account-Löschung aus der Auth-Datenbank muss manuell in der Supabase-Konsole durchgeführt werden (oder via Edge Function), da der Client keinen Zugriff auf Auth-Deletion hat.
-          </p>
+        <div className="pt-4 border-t border-white/10 shrink-0">
+          <div className="flex flex-col sm:flex-row items-start gap-3 p-4 bg-orange-500/10 border border-orange-500/20 rounded-2xl">
+            <AlertCircle className="text-orange-500 shrink-0 mt-0.5" size={18} />
+            <p className="text-xs text-orange-200 leading-relaxed font-medium">
+              Hinweis: Das Löschen der Highscores erfolgt sofort. Die eigentliche Account-Löschung aus der Auth-Datenbank muss manuell in der Supabase-Konsole durchgeführt werden (oder via Edge Function), da der Client keinen Zugriff auf Auth-Deletion hat.
+            </p>
+          </div>
         </div>
       </div>
     </motion.div>

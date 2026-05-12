@@ -45,8 +45,10 @@ export const Leaderboard: React.FC = () => {
       
       if (data) {
         for (const s of data) {
-          if (!seenUsers.has(s.username)) {
-            seenUsers.add(s.username);
+          // Wir nutzen die user_id zur Eindeutigkeit, falls vorhanden
+          const identifier = s.user_id || s.username;
+          if (!seenUsers.has(identifier)) {
+            seenUsers.add(identifier);
             uniqueScores.push(s);
           }
           if (uniqueScores.length >= 10) break;

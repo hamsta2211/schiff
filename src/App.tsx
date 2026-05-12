@@ -32,6 +32,8 @@ export default function App() {
   
   const [currentPlayerState, setCurrentPlayerState] = useState<Player | null>(null);
 
+  const [startLevel, setStartLevel] = useState(1);
+
   const isAdmin = session?.user?.email === 'david.helmel@outlook.com';
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -134,7 +136,7 @@ export default function App() {
   }, []);
 
   const handleTouchStart = (e: React.TouchEvent) => {
-    if (gameState !== 'PLAYING') return;
+    if (gameState !== 'PLAYING' && gameState !== 'BOSS_FIGHT') return;
     if ((e.target as HTMLElement).closest('button')) return;
 
     const touch = e.touches[0];
@@ -171,6 +173,13 @@ export default function App() {
     setCurrentPlayerState(null);
     setScore(0);
     setLastScore(0);
+    setGameStats({ 
+        health: 100 + (startLevel - 1) * 20, 
+        maxHealth: 100 + (startLevel - 1) * 20, 
+        level: startLevel, 
+        xp: 0, 
+        xpNext: 100 * startLevel 
+    });
   };
 
   const handleLevelUp = useCallback((player: Player) => {
@@ -252,12 +261,56 @@ export default function App() {
         onScoreUpdate={setScore}
         onStatsUpdate={setGameStats}
         onDamage={triggerShake}
+        onBossStart={() => {
+          setGameState('BOSS_INTRO');
+          setTimeout(() => setGameState('BOSS_FIGHT'), 3000);
+        }}
+        onBossEnd={() => {
+          setGameState('PLAYING');
+          confetti({
+            particleCount: 150,
+            spread: 90,
+            origin: { y: 0.5 },
+            colors: ['#ff00ff', '#00ccff', '#ffffff']
+          });
+        }}
         playerStats={playerStats}
         joystickDir={joystickDir}
+        startLevel={startLevel}
       />
 
+      {/* Boss Overlays */}
+      <AnimatePresence>
+        {gameState === 'BOSS_INTRO' && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.5 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 1.5 }}
+            className="absolute inset-0 z-[70] flex flex-col items-center justify-center pointer-events-none"
+          >
+            <motion.div
+              animate={{ 
+                textShadow: ['0 0 10px #ff00ff', '0 0 40px #ff00ff', '0 0 10px #ff00ff'],
+              }}
+              transition={{ repeat: Infinity, duration: 1 }}
+              className="text-6xl md:text-9xl font-black italic tracking-tighter text-[#ff00ff] uppercase"
+            >
+              Boss Incoming
+            </motion.div>
+            <div className="h-1 w-64 bg-white/20 mt-4 rounded-full overflow-hidden">
+              <motion.div 
+                initial={{ width: 0 }}
+                animate={{ width: '100%' }}
+                transition={{ duration: 3 }}
+                className="h-full bg-[#ff00ff]"
+              />
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Joystick for Mobile */}
-      {gameState === 'PLAYING' && joystickPos && (
+      {(gameState === 'PLAYING' || gameState === 'BOSS_FIGHT') && joystickPos && (
         <Joystick 
           position={joystickPos} 
           onMove={setJoystickDir} 
@@ -267,7 +320,7 @@ export default function App() {
 
       {/* Global Controls & HUD */}
       <div className="absolute top-4 left-4 right-4 md:top-6 md:left-6 md:right-6 z-[60] flex items-start justify-between pointer-events-none">
-        {gameState === 'PLAYING' && (
+        {(gameState === 'PLAYING' || gameState === 'BOSS_INTRO' || gameState === 'BOSS_FIGHT') && (
           <div className="flex flex-col gap-2 w-full max-w-[160px] sm:max-w-[200px] md:max-w-xs pointer-events-auto">
             {/* Health Bar */}
             <div className="relative h-4 md:h-6 bg-black/40 border border-white/10 rounded-full overflow-hidden backdrop-blur-sm">
@@ -300,7 +353,7 @@ export default function App() {
         )}
 
         <div className="flex items-center gap-3 pointer-events-auto ml-auto">
-          {gameState === 'PLAYING' && (
+          {(gameState === 'PLAYING' || gameState === 'BOSS_FIGHT') && (
             <>
               <div className="px-4 py-2 bg-black/60 border border-white/10 rounded-xl backdrop-blur-md flex flex-col items-end">
                 <span className="text-[8px] font-bold uppercase tracking-widest text-[#00ccff]">Score</span>
@@ -368,7 +421,7 @@ export default function App() {
               className="absolute inset-0 bg-black/60 pointer-events-auto"
             />
             <div className="relative z-10 w-full max-w-4xl pointer-events-auto">
-              <AdminPanel onClose={() => setShowAdminPanel(false)} />
+              <AdminPanel onClose={() => setShowAdminPanel(false)} startLevel={startLevel} onSetStartLevel={setStartLevel} isAdmin={isAdmin} />
             </div>
           </div>
         )}
