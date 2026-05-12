@@ -50,13 +50,18 @@ export function AccountSettings({ user, onUsernameUpdate }: { user: any, onUsern
       if (updateError) throw updateError;
       
       // 2. Update Username in high_scores table
-      const { error: scoresError } = await supabase
+      const { data: updateData, error: scoresError, count } = await supabase
         .from('high_scores')
         .update({ username })
-        .eq('user_id', sessionData.session.user.id);
+        .eq('user_id', sessionData.session.user.id)
+        .select('*');
+
+      console.log('Update scores result:', { updateData, scoresError, count, targetUserId: sessionData.session.user.id });
 
       if (scoresError) {
-        console.warn('Hinweis: Bestenliste konnte nicht aktualisiert werden (evtl. noch kein Score vorhanden):', scoresError.message);
+        console.warn('Hinweis: Bestenliste konnte nicht aktualisiert werden:', scoresError.message);
+      } else if (!updateData || updateData.length === 0) {
+        throw new Error('Name konnte in der Bestenliste nicht aktualisiert werden (möglicherweise fehlen RLS-Rechte für UPDATE).');
       }
       
       onUsernameUpdate(username);
