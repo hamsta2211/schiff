@@ -3,6 +3,8 @@ import { motion, AnimatePresence } from 'motion/react';
 import { NeonCanvas } from './components/NeonCanvas';
 import { Joystick } from './components/Joystick';
 import { SupabaseAuth } from './components/SupabaseAuth';
+import { AccountSettings } from './components/AccountSettings';
+import { AdminPanel } from './components/AdminPanel';
 import { Leaderboard } from './components/Leaderboard';
 import { supabase, isSupabaseConfigured } from './lib/supabase';
 import { GameState, Player, Upgrade, Vector } from './types';
@@ -25,8 +27,12 @@ export default function App() {
   const [personalHighScore, setPersonalHighScore] = useState<number>(0);
   const [lastScore, setLastScore] = useState(0); 
   const [gameStats, setGameStats] = useState({ health: 100, maxHealth: 100, level: 1, xp: 0, xpNext: 100 });
+  const [showAdminPanel, setShowAdminPanel] = useState(false);
+  const [pendingRequests, setPendingRequests] = useState(0);
   
   const [currentPlayerState, setCurrentPlayerState] = useState<Player | null>(null);
+
+  const isAdmin = session?.user?.email === 'david.helmel@outlook.com';
 
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -68,14 +74,24 @@ export default function App() {
           fetchPersonalHighScore(session.user.id);
         } else {
           setPersonalHighScore(0);
+          setUsername('');
         }
       });
 
-      const handleFullscreenChange = () => {
-        setIsFullscreen(!!document.fullscreenElement);
-      };
-      document.addEventListener('fullscreenchange', handleFullscreenChange);
+      // Polling für Admin-Anfragen
+      let interval: any;
+      if (session?.user?.email === 'david.helmel@outlook.com') {
+        const fetchPendingCount = async () => {
+          const { count } = await supabase
+            .from('deletion_requests')
+            .select('*', { count: 'exact', head: true });
+          setPendingRequests(count || 0);
+        };
+        fetchPendingCount();
+        interval = setInterval(fetchPendingCount, 30000); // Alle 30 Sekunden prüfen
+      }
 
+      const handleFullscreenChange = () => setIsFullscreen(!!document.fullscreenElement);
       const handleKeyDown = (e: KeyboardEvent) => {
         if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') {
           setGameState(prev => {
@@ -86,19 +102,17 @@ export default function App() {
         }
       };
 
+      document.addEventListener('fullscreenchange', handleFullscreenChange);
       window.addEventListener('keydown', handleKeyDown);
 
       return () => {
         subscription.unsubscribe();
+        if (interval) clearInterval(interval);
         document.removeEventListener('fullscreenchange', handleFullscreenChange);
         window.removeEventListener('keydown', handleKeyDown);
       };
     } else {
-      const handleFullscreenChange = () => {
-        setIsFullscreen(!!document.fullscreenElement);
-      };
-      document.addEventListener('fullscreenchange', handleFullscreenChange);
-
+      const handleFullscreenChange = () => setIsFullscreen(!!document.fullscreenElement);
       const handleKeyDown = (e: KeyboardEvent) => {
         if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') {
           setGameState(prev => {
@@ -109,6 +123,7 @@ export default function App() {
         }
       };
 
+      document.addEventListener('fullscreenchange', handleFullscreenChange);
       window.addEventListener('keydown', handleKeyDown);
 
       return () => {
@@ -198,9 +213,9 @@ export default function App() {
   }, [personalHighScore]);
 
   const handleQuitAndSave = async (currentScore: number) => {
+    await saveScoreToSupabase(currentScore);
     setGameState('MENU');
     setScore(0);
-    await saveScoreToSupabase(currentScore);
   };
 
 
@@ -323,8 +338,41 @@ export default function App() {
               <Maximize2 size={24} className="text-white group-hover:text-[#00ccff] transition-colors" />
             )}
           </button>
+
+          {isAdmin && (
+            <button
+              onClick={() => setShowAdminPanel(true)}
+              className="relative w-12 h-12 flex items-center justify-center bg-[#ff0055]/10 hover:bg-[#ff0055]/20 border border-[#ff0055]/30 rounded-xl transition-all active:scale-95 group backdrop-blur-md"
+              title="Admin Panel"
+            >
+              <Shield size={24} className="text-[#ff0055]" />
+              {pendingRequests > 0 && (
+                <span className="absolute -top-1 -right-1 w-5 h-5 bg-[#ff0055] text-white text-[10px] font-bold rounded-full flex items-center justify-center animate-bounce border-2 border-black">
+                  {pendingRequests}
+                </span>
+              )}
+            </button>
+          )}
         </div>
       </div>
+
+      {/* Admin Panel Overlay */}
+      <AnimatePresence>
+        {showAdminPanel && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-10 pointer-events-none">
+            <motion.div 
+              initial={{ opacity: 0 }} 
+              animate={{ opacity: 1 }} 
+              exit={{ opacity: 0 }}
+              onClick={() => setShowAdminPanel(false)}
+              className="absolute inset-0 bg-black/60 pointer-events-auto"
+            />
+            <div className="relative z-10 w-full max-w-4xl pointer-events-auto">
+              <AdminPanel onClose={() => setShowAdminPanel(false)} />
+            </div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Overlay UI */}
       <AnimatePresence>
@@ -534,14 +582,21 @@ export default function App() {
             initial="hidden"
             animate="visible"
             exit="exit"
-            className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 backdrop-blur-md z-50 px-6"
+            className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 backdrop-blur-md z-50 px-6 py-10 overflow-y-auto"
           >
-            <SupabaseAuth onAuthSuccess={() => setGameState('MENU')} />
+            {session ? (
+              <AccountSettings 
+                user={session.user} 
+                onUsernameUpdate={(name) => setUsername(name || 'Anonym')} 
+              />
+            ) : (
+              <SupabaseAuth onAuthSuccess={() => setGameState('MENU')} />
+            )}
             <button 
               onClick={() => setGameState('MENU')}
-              className="mt-8 text-sm font-bold uppercase tracking-widest text-[#ff0055] hover:brightness-125 transition-all"
+              className="mt-8 text-sm font-bold uppercase tracking-widest text-[#ff0055] hover:brightness-125 transition-all mb-8"
             >
-              Abbrechen
+              Schließen
             </button>
           </motion.div>
         )}
