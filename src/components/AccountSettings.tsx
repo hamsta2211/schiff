@@ -37,17 +37,32 @@ export function AccountSettings({ user, onUsernameUpdate }: { user: any, onUsern
     try {
       if (!isSupabaseConfigured) throw new Error('Supabase nicht konfiguriert');
 
-      // Update Username in Metadata
-      const { error: updateError } = await supabase.auth.updateUser({
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData.session) {
+        throw new Error('Sitzung abgelaufen. Bitte melden Sie sich ab und erneut an.');
+      }
+
+      // 1. Update Auth Metadata
+      const { data: { user: updatedUser }, error: updateError } = await supabase.auth.updateUser({
         data: { username }
       });
 
       if (updateError) throw updateError;
       
+      // 2. Update Username in high_scores table
+      const { error: scoresError } = await supabase
+        .from('high_scores')
+        .update({ username })
+        .eq('user_id', sessionData.session.user.id);
+
+      if (scoresError) {
+        console.warn('Hinweis: Bestenliste konnte nicht aktualisiert werden (evtl. noch kein Score vorhanden):', scoresError.message);
+      }
+      
       onUsernameUpdate(username);
       setSuccess('Profil erfolgreich aktualisiert!');
     } catch (err: any) {
-      setError(err.message);
+      setError(err.message === 'Auth session missing!' ? 'Sitzung abgelaufen. Bitte melden Sie sich ab und erneut an.' : err.message);
     } finally {
       setLoading(false);
     }
@@ -60,11 +75,14 @@ export function AccountSettings({ user, onUsernameUpdate }: { user: any, onUsern
     setSuccess(null);
 
     try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData.session) throw new Error('Sitzung abgelaufen. Bitte ab- und anmelden.');
+
       const { error: updateError } = await supabase.auth.updateUser({ email });
       if (updateError) throw updateError;
       setSuccess('Bestätigungsemail an die neue Adresse gesendet!');
     } catch (err: any) {
-      setError(err.message);
+      setError(err.message === 'Auth session missing!' ? 'Sitzung abgelaufen. Bitte melden Sie sich ab und erneut an.' : err.message);
     } finally {
       setLoading(false);
     }
@@ -82,12 +100,15 @@ export function AccountSettings({ user, onUsernameUpdate }: { user: any, onUsern
     setSuccess(null);
 
     try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData.session) throw new Error('Sitzung abgelaufen. Bitte ab- und anmelden.');
+
       const { error: updateError } = await supabase.auth.updateUser({ password: newPassword });
       if (updateError) throw updateError;
       setNewPassword('');
       setSuccess('Passwort wurde erfolgreich geändert!');
     } catch (err: any) {
-      setError(err.message);
+      setError(err.message === 'Auth session missing!' ? 'Sitzung abgelaufen. Bitte melden Sie sich ab und erneut an.' : err.message);
     } finally {
       setLoading(false);
     }
