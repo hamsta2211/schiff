@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { Player, Enemy, Bullet, XPOrb, Particle, Vector, GameState } from '../types';
+import { Player, Enemy, Bullet, XPOrb, Particle, Vector, GameState, Entity } from '../types';
 
 interface NeonCanvasProps {
   gameState: GameState;
@@ -178,11 +178,11 @@ export const NeonCanvas: React.FC<NeonCanvasProps> = ({
       vel: { x: 0, y: 0 },
       radius: 40,
       color: '#ff00ff',
-      health: 1000 + level * 200,
-      maxHealth: 1000 + level * 200,
+      health: 5000 + level * 1000,
+      maxHealth: 5000 + level * 1000,
       speed: 1,
       damage: 25,
-      value: 500,
+      value: 100,
     };
   }, []);
 
@@ -427,16 +427,17 @@ export const NeonCanvas: React.FC<NeonCanvasProps> = ({
           bull.distanceTraveled = bull.maxDistance + 1;
           if (b.health <= 0) {
             createExplosion(b.pos, b.color, 50);
-            p.score += b.value;
-            // Large XP reward
-            for(let i=0; i<15; i++) {
+            // No immediate score, orbs will give score
+            const orbCount = 20;
+            const orbValue = b.value / orbCount; // 100 / 20 = 5
+            for(let i=0; i<orbCount; i++) {
               xpOrbsRef.current.push({
                 id: 'orb-' + Math.random(),
                 pos: { x: b.pos.x + (Math.random()-0.5)*50, y: b.pos.y + (Math.random()-0.5)*50 },
                 vel: { x: (Math.random()-0.5)*10, y: (Math.random()-0.5)*10 },
                 radius: 8,
                 color: COLORS.xp,
-                value: b.value / 15
+                value: orbValue
               });
             }
             bossRef.current = null;

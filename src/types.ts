@@ -48,7 +48,7 @@ export interface Particle extends Entity {
   opacity: number;
 }
 
-export type GameState = 'MENU' | 'PLAYING' | 'PAUSED' | 'LEVEL_UP' | 'GAME_OVER' | 'AUTH' | 'LEADERBOARD' | 'BOSS_INTRO' | 'BOSS_FIGHT';
+export type GameState = 'MENU' | 'PLAYING' | 'PAUSED' | 'LEVEL_UP' | 'GAME_OVER' | 'AUTH' | 'LEADERBOARD' | 'BOSS_INTRO' | 'BOSS_FIGHT' | 'ARROW_DASH' | 'ARROW_DASH_TELEPORT' | 'ARROW_DASH_BOSS' | 'ARROW_DASH_GAME_OVER' | 'ARROW_DASH_PAUSED' | 'ARROW_DASH_COUNTDOWN' | 'ARROW_DASH_MENU' | 'ARROW_DASH_LEADERBOARD';
 
 export interface Upgrade {
   id: string;

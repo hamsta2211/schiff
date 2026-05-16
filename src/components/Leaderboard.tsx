@@ -9,7 +9,7 @@ interface Score {
   created_at: string;
 }
 
-export const Leaderboard: React.FC = () => {
+export const Leaderboard: React.FC<{ mode?: 'normal' | 'arrow_dash' }> = ({ mode = 'normal' }) => {
   const [scores, setScores] = useState<Score[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -25,16 +25,15 @@ export const Leaderboard: React.FC = () => {
     } else {
       setLoading(false);
     }
-  }, []);
+  }, [mode]);
 
   const fetchScores = async (showLoading: boolean) => {
     if (!isSupabaseConfigured) return;
     if (showLoading) setLoading(true);
     try {
-      // Wir holen alle Scores und filtern sie in JS, um sicherzustellen, dass jeder User nur einmal erscheint
-      // (Besser wäre ein SQL-View oder 'DISTINCT ON' in Supabase, aber so ist es am sichersten ohne Datenbank-Änderung)
+      const table = mode === 'arrow_dash' ? 'arrow_dash_scores' : 'high_scores';
       const { data, error } = await supabase
-        .from('high_scores')
+        .from(table)
         .select('*')
         .order('score', { ascending: false });
 

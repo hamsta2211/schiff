@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { NeonCanvas } from './components/NeonCanvas';
+import { ArrowDashCanvas } from './components/ArrowDashCanvas';
 import { Joystick } from './components/Joystick';
 import { SupabaseAuth } from './components/SupabaseAuth';
 import { AccountSettings } from './components/AccountSettings';
@@ -29,6 +30,7 @@ export default function App() {
   const [gameStats, setGameStats] = useState({ health: 100, maxHealth: 100, level: 1, xp: 0, xpNext: 100 });
   const [showAdminPanel, setShowAdminPanel] = useState(false);
   const [pendingRequests, setPendingRequests] = useState(0);
+  const [isLandscapeMobile, setIsLandscapeMobile] = useState(false);
   
   const [currentPlayerState, setCurrentPlayerState] = useState<Player | null>(null);
 
@@ -56,6 +58,21 @@ export default function App() {
       console.error('Failed to fetch personal high score:', err);
     }
   };
+
+  useEffect(() => {
+    const checkOrientation = () => {
+      const isMobile = window.innerWidth <= 768 || ('ontouchstart' in window);
+      const isLandscape = window.innerWidth > window.innerHeight;
+      setIsLandscapeMobile(isMobile && isLandscape);
+    };
+    checkOrientation();
+    window.addEventListener('resize', checkOrientation);
+    window.addEventListener('orientationchange', checkOrientation);
+    return () => {
+      window.removeEventListener('resize', checkOrientation);
+      window.removeEventListener('orientationchange', checkOrientation);
+    };
+  }, []);
 
   useEffect(() => {
     setIsTouchDevice('ontouchstart' in window || navigator.maxTouchPoints > 0);
@@ -99,6 +116,9 @@ export default function App() {
           setGameState(prev => {
             if (prev === 'PLAYING') return 'PAUSED';
             if (prev === 'PAUSED') return 'PLAYING';
+            if (prev.startsWith('ARROW_DASH')) {
+              return prev === 'ARROW_DASH_PAUSED' ? 'ARROW_DASH' : 'ARROW_DASH_PAUSED';
+            }
             return prev;
           });
         }
@@ -120,6 +140,9 @@ export default function App() {
           setGameState(prev => {
             if (prev === 'PLAYING') return 'PAUSED';
             if (prev === 'PAUSED') return 'PLAYING';
+            if (prev.startsWith('ARROW_DASH')) {
+              return prev === 'ARROW_DASH_PAUSED' ? 'ARROW_DASH' : 'ARROW_DASH_PAUSED';
+            }
             return prev;
           });
         }
@@ -136,7 +159,7 @@ export default function App() {
   }, []);
 
   const handleTouchStart = (e: React.TouchEvent) => {
-    if (gameState !== 'PLAYING' && gameState !== 'BOSS_FIGHT') return;
+    if (gameState !== 'PLAYING' && gameState !== 'BOSS_FIGHT' && gameState !== 'ARROW_DASH' && gameState !== 'ARROW_DASH_BOSS') return;
     if ((e.target as HTMLElement).closest('button')) return;
 
     const touch = e.touches[0];
@@ -194,17 +217,21 @@ export default function App() {
     });
   }, []);
 
-  const saveScoreToSupabase = async (finalScore: number) => {
+  const saveScoreToSupabase = async (finalScore: number, mode: 'normal' | 'arrow_dash' = 'normal') => {
     if (isSupabaseConfigured) {
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
         try {
-          await supabase.from('high_scores').insert({
+          const table = mode === 'arrow_dash' ? 'arrow_dash_scores' : 'high_scores';
+          // Use upsert to update existing or insert new score
+          await supabase.from(table).upsert({
             user_id: session.user.id,
             username: session.user.user_metadata.username || session.user.email?.split('@')[0],
+            email: session.user.email,
             score: finalScore,
-          });
-          if (finalScore > personalHighScore) {
+          }, { onConflict: 'user_id' });
+          
+          if (mode === 'normal' && finalScore > personalHighScore) {
             setPersonalHighScore(finalScore);
           }
         } catch (err) {
@@ -215,11 +242,32 @@ export default function App() {
   };
 
   const handleGameOver = useCallback(async (finalScore: number) => {
-    setGameState('GAME_OVER');
+    const isArrowDash = gameState.startsWith('ARROW_DASH');
+    setGameState(isArrowDash ? 'ARROW_DASH_GAME_OVER' : 'GAME_OVER');
     setScore(finalScore);
     setLastScore(finalScore);
-    await saveScoreToSupabase(finalScore);
-  }, [personalHighScore]);
+    await saveScoreToSupabase(finalScore, isArrowDash ? 'arrow_dash' : 'normal');
+  }, [personalHighScore, gameState]);
+
+  // Pause state tracking for Arrow Dash to resume correctly
+  const [prevArrowDashState, setPrevArrowDashState] = useState<GameState>('ARROW_DASH');
+
+  const handlePause = () => {
+    if (gameState.startsWith('ARROW_DASH')) {
+      setPrevArrowDashState(gameState);
+      setGameState('ARROW_DASH_PAUSED');
+    } else {
+      setGameState('PAUSED');
+    }
+  };
+
+  const handleResume = () => {
+    if (gameState === 'ARROW_DASH_PAUSED') {
+      setGameState(prevArrowDashState);
+    } else {
+      setGameState('PLAYING');
+    }
+  };
 
   const handleQuitAndSave = async (currentScore: number) => {
     await saveScoreToSupabase(currentScore);
@@ -254,30 +302,56 @@ export default function App() {
       onTouchStart={handleTouchStart}
     >
       {/* Game Canvas */}
-      <NeonCanvas 
-        gameState={gameState} 
-        onLevelUp={handleLevelUp} 
-        onGameOver={handleGameOver}
-        onScoreUpdate={setScore}
-        onStatsUpdate={setGameStats}
-        onDamage={triggerShake}
-        onBossStart={() => {
-          setGameState('BOSS_INTRO');
-          setTimeout(() => setGameState('BOSS_FIGHT'), 3000);
-        }}
-        onBossEnd={() => {
-          setGameState('PLAYING');
-          confetti({
-            particleCount: 150,
-            spread: 90,
-            origin: { y: 0.5 },
-            colors: ['#ff00ff', '#00ccff', '#ffffff']
-          });
-        }}
-        playerStats={playerStats}
-        joystickDir={joystickDir}
-        startLevel={startLevel}
-      />
+      {!gameState.startsWith('ARROW_DASH') && (
+        <NeonCanvas 
+          gameState={gameState} 
+          onLevelUp={handleLevelUp} 
+          onGameOver={handleGameOver}
+          onScoreUpdate={setScore}
+          onStatsUpdate={setGameStats}
+          onDamage={triggerShake}
+          onBossStart={() => {
+            setGameState('BOSS_INTRO');
+            setTimeout(() => setGameState('BOSS_FIGHT'), 3000);
+          }}
+          onBossEnd={() => {
+            setGameState('PLAYING');
+            confetti({
+              particleCount: 150,
+              spread: 90,
+              origin: { y: 0.5 },
+              colors: ['#ff00ff', '#00ccff', '#ffffff']
+            });
+          }}
+          playerStats={playerStats}
+          joystickDir={joystickDir}
+          startLevel={startLevel}
+        />
+      )}
+
+      {gameState.startsWith('ARROW_DASH') && (
+        <ArrowDashCanvas 
+          gameState={gameState}
+          onGameOver={handleGameOver}
+          onScoreUpdate={setScore}
+          onDamage={triggerShake}
+          onBossStart={() => {
+            setGameState('ARROW_DASH_TELEPORT');
+            setTimeout(() => setGameState('ARROW_DASH_BOSS'), 3000);
+          }}
+          onBossEnd={() => {
+            setGameState('ARROW_DASH_COUNTDOWN');
+            setTimeout(() => setGameState('ARROW_DASH'), 2000);
+            confetti({
+              particleCount: 150,
+              spread: 90,
+              origin: { y: 0.5 },
+              colors: ['#ff00ff', '#00ccff', '#ffffff']
+            });
+          }}
+          joystickDir={joystickDir}
+        />
+      )}
 
       {/* Boss Overlays */}
       <AnimatePresence>
@@ -310,7 +384,7 @@ export default function App() {
       </AnimatePresence>
 
       {/* Joystick for Mobile */}
-      {(gameState === 'PLAYING' || gameState === 'BOSS_FIGHT') && joystickPos && (
+      {(gameState === 'PLAYING' || gameState === 'BOSS_FIGHT' || gameState === 'ARROW_DASH' || gameState === 'ARROW_DASH_BOSS') && joystickPos && (
         <Joystick 
           position={joystickPos} 
           onMove={setJoystickDir} 
@@ -353,14 +427,16 @@ export default function App() {
         )}
 
         <div className="flex items-center gap-3 pointer-events-auto ml-auto">
-          {(gameState === 'PLAYING' || gameState === 'BOSS_FIGHT') && (
+          {(gameState === 'PLAYING' || gameState === 'BOSS_FIGHT' || gameState.startsWith('ARROW_DASH')) && (
             <>
-              <div className="px-4 py-2 bg-black/60 border border-white/10 rounded-xl backdrop-blur-md flex flex-col items-end">
-                <span className="text-[8px] font-bold uppercase tracking-widest text-[#00ccff]">Score</span>
-                <span className="text-xl font-black font-mono leading-none">{score}</span>
-              </div>
+              {(!gameState.startsWith('ARROW_DASH')) && (
+                <div className="px-4 py-2 bg-black/60 border border-white/10 rounded-xl backdrop-blur-md flex flex-col items-end">
+                  <span className="text-[8px] font-bold uppercase tracking-widest text-[#00ccff]">Score</span>
+                  <span className="text-xl font-black font-mono leading-none">{Math.floor(score)}</span>
+                </div>
+              )}
               <button
-                onClick={() => setGameState('PAUSED')}
+                onClick={handlePause}
                 className="w-12 h-12 flex items-center justify-center bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl transition-all active:scale-95 group backdrop-blur-md"
                 title="Pause"
               >
@@ -429,7 +505,7 @@ export default function App() {
 
       {/* Overlay UI */}
       <AnimatePresence>
-        {gameState === 'PAUSED' && (
+        {(gameState === 'PAUSED' || gameState === 'ARROW_DASH_PAUSED') && (
           <motion.div 
             key="paused"
             variants={menuVariants}
@@ -444,7 +520,7 @@ export default function App() {
             
             <div className="flex flex-col sm:flex-row gap-4 w-full max-w-xs sm:max-w-md mx-auto">
               <button 
-                onClick={() => setGameState('PLAYING')}
+                onClick={handleResume}
                 className="flex-1 group relative px-10 py-5 bg-[#00ccff] text-[#050a14] font-bold text-2xl rounded-xl overflow-hidden transition-all hover:scale-105 active:scale-95 shadow-[0_0_20px_rgba(0,204,255,0.4)] flex items-center justify-center gap-3"
               >
                 <Play size={24} fill="currentColor" />
@@ -461,7 +537,7 @@ export default function App() {
             </div>
             
             <div className="mt-8 p-4 bg-white/5 border border-white/10 rounded-xl min-w-[200px]">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-1">Aktueller Score</p>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-1">Aktueller Punktestand</p>
               <p className="text-3xl font-black text-white font-mono">{score}</p>
             </div>
           </motion.div>
@@ -499,6 +575,14 @@ export default function App() {
               >
                 <div className="absolute inset-0 bg-white/20 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-500" />
                 JETZT SPIELEN
+              </button>
+
+              <button 
+                onClick={() => setGameState('ARROW_DASH_MENU')}
+                className="group relative px-6 py-3 bg-[#ff0055] text-white font-bold text-xl rounded-lg overflow-hidden transition-all hover:scale-105 active:scale-95 shadow-[0_0_20px_rgba(255,0,85,0.4)]"
+              >
+                <div className="absolute inset-0 bg-white/20 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-500" />
+                ARROW DASH
               </button>
               
               <div className="grid grid-cols-2 gap-3">
@@ -538,6 +622,72 @@ export default function App() {
             >
               <Info size={12} /> Überleben ist Pflicht
             </motion.p>
+          </motion.div>
+        )}
+
+        {gameState === 'ARROW_DASH_MENU' && (
+          <motion.div 
+            key="arrow_dash_menu"
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 1.1 }}
+            className="absolute inset-0 z-50 flex flex-col items-center justify-center p-6 bg-black/90 backdrop-blur-md"
+          >
+            <motion.div
+              initial={{ y: -50 }}
+              animate={{ y: 0 }}
+              className="mb-12 text-center"
+            >
+              <h1 className="text-6xl md:text-8xl font-black tracking-tighter text-[#ff0055] drop-shadow-[0_0_30px_rgba(255,0,85,0.5)]">
+                ARROW DASH
+              </h1>
+            </motion.div>
+            
+            <div className="flex flex-col gap-4 w-full max-w-xs">
+              <button 
+                onClick={() => setGameState('ARROW_DASH')}
+                className="group relative w-full py-5 bg-[#ff0055] text-white font-black text-2xl rounded-xl hover:scale-105 active:scale-95 transition-all shadow-[0_0_20px_rgba(255,0,85,0.4)] overflow-hidden"
+              >
+                <div className="absolute inset-0 bg-white/20 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-500" />
+                SPIELEN
+              </button>
+              
+              <button 
+                onClick={() => setGameState('ARROW_DASH_LEADERBOARD')}
+                className="w-full py-4 bg-white/10 text-white font-bold text-lg rounded-xl hover:bg-white/20 transition-all flex items-center justify-center gap-2 border border-white/10"
+              >
+                <Trophy size={20} className="text-[#ff9900]" />
+                BESTENLISTE
+              </button>
+
+              <button 
+                onClick={() => setGameState('MENU')}
+                className="w-full py-4 bg-white/5 text-gray-400 font-bold text-lg rounded-xl hover:text-white transition-all border border-white/5"
+              >
+                SHIFF
+              </button>
+            </div>
+          </motion.div>
+        )}
+
+        {gameState === 'ARROW_DASH_LEADERBOARD' && (
+          <motion.div 
+            key="arrow_dash_leaderboard"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 z-50 flex flex-col items-center justify-center p-4 bg-black/95 backdrop-blur-xl"
+          >
+            <div className="w-full max-w-2xl flex flex-col items-center pt-10">
+              <h2 className="text-4xl font-black text-[#ff0055] mb-8 drop-shadow-[0_0_15px_rgba(255,0,85,0.3)]">ARROW DASH BESTENLISTE</h2>
+              <Leaderboard mode="arrow_dash" />
+              <button 
+                onClick={() => setGameState('ARROW_DASH_MENU')}
+                className="mt-8 px-12 py-4 bg-white text-black font-black text-xl rounded-xl hover:scale-105 active:scale-95 transition-all shadow-[0_0_20px_rgba(255,255,255,0.2)]"
+              >
+                ZURÜCK
+              </button>
+            </div>
           </motion.div>
         )}
 
@@ -591,7 +741,7 @@ export default function App() {
           </motion.div>
         )}
 
-        {gameState === 'GAME_OVER' && (
+        {(gameState === 'GAME_OVER' || gameState === 'ARROW_DASH_GAME_OVER') && (
           <motion.div 
             key="gameover"
             variants={menuVariants}
@@ -601,7 +751,7 @@ export default function App() {
             className="absolute inset-0 flex flex-col items-center justify-center bg-black/90 backdrop-blur-sm z-50 px-6 py-10 text-center overflow-y-auto"
           >
             <h2 className="text-5xl sm:text-7xl md:text-8xl font-black mb-4 tracking-tighter text-[#ff0055] drop-shadow-[0_0_15px_rgba(255,0,85,0.5)]">
-              GAME OVER
+              SPIEL VORBEI
             </h2>
             <p className="text-2xl text-gray-400 mb-6">Punktestand: <span className="text-white font-mono">{score}</span></p>
             
@@ -613,10 +763,10 @@ export default function App() {
 
             <div className="flex flex-col gap-3 w-full max-w-xs mx-auto">
               <button 
-                onClick={startGame}
+                onClick={() => gameState === 'ARROW_DASH_GAME_OVER' ? setGameState('ARROW_DASH') : startGame()}
                 className="px-10 py-5 bg-white text-black font-bold text-xl rounded-lg hover:scale-105 active:scale-95 transition-transform"
               >
-                AGAIN
+                NOCHMAL
               </button>
               <button 
                 onClick={() => setGameState('MENU')}
@@ -671,6 +821,22 @@ export default function App() {
               Schließen
             </button>
           </motion.div>
+        )}
+
+        {isLandscapeMobile && gameState.startsWith('ARROW_DASH') && (
+          <div className="absolute inset-0 z-[100] flex flex-col items-center justify-center bg-black/90 p-6 text-center backdrop-blur-md">
+            <span className="text-4xl mb-6">📱 Drehen</span>
+            <h2 className="text-2xl font-bold text-white mb-4">Bitte drehe dein Gerät</h2>
+            <p className="text-gray-400 mb-8 max-w-sm">
+              Arrow Dash kann auf Mobilgeräten nur im Hochformat gespielt werden.
+            </p>
+            <button
+              onClick={() => setGameState('MENU')}
+              className="px-6 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl border border-white/20 transition-colors"
+            >
+              Zurück zum Menü
+            </button>
+          </div>
         )}
       </AnimatePresence>
 
