@@ -314,25 +314,23 @@ export function AdminPanel({
                          onClick={async () => {
                            setLoading(true);
                            try {
-                             // Update high_scores using upsert
-                             await supabase
-                               .from('high_scores')
-                               .upsert({ 
+                             // Normal Scores -> Remove duplicates and insert
+                             await supabase.from('high_scores').delete().eq('user_id', selectedUser.id);
+                             await supabase.from('high_scores').insert({ 
                                  user_id: selectedUser.id, 
                                  score: editScores.normal,
                                  username: selectedUser.username,
                                  email: selectedUser.email !== 'Nicht hinterlegt' ? selectedUser.email : null
-                               }, { onConflict: 'user_id' });
+                               });
                              
-                             // Update arrow_dash_scores using upsert
-                             await supabase
-                               .from('arrow_dash_scores')
-                               .upsert({ 
+                             // Arrow Dash Scores -> Remove duplicates and insert
+                             await supabase.from('arrow_dash_scores').delete().eq('user_id', selectedUser.id);
+                             await supabase.from('arrow_dash_scores').insert({ 
                                  user_id: selectedUser.id, 
                                  score: editScores.arrowDash,
                                  username: selectedUser.username,
                                  email: selectedUser.email !== 'Nicht hinterlegt' ? selectedUser.email : null
-                               }, { onConflict: 'user_id' });
+                               });
                              
                              alert('Scores erfolgreich aktualisiert!');
                              await fetchUsers();

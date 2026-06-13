@@ -26,6 +26,7 @@ export default function App() {
   const [session, setSession] = useState<any>(null);
   const [username, setUsername] = useState<string>('');
   const [personalHighScore, setPersonalHighScore] = useState<number>(0);
+  const [personalDashHighScore, setPersonalDashHighScore] = useState<number>(0);
   const [lastScore, setLastScore] = useState(0); 
   const [gameStats, setGameStats] = useState({ health: 100, maxHealth: 100, level: 1, xp: 0, xpNext: 100 });
   const [showAdminPanel, setShowAdminPanel] = useState(false);
@@ -43,19 +44,31 @@ export default function App() {
   const fetchPersonalHighScore = async (uid: string) => {
     if (!isSupabaseConfigured) return;
     try {
-      const { data, error } = await supabase
+      // Fetch Normal Highscore
+      const { data: normalData } = await supabase
         .from('high_scores')
         .select('score')
         .eq('user_id', uid)
         .order('score', { ascending: false })
         .limit(1);
       
-      if (error) throw error;
-      if (data && data.length > 0) {
-        setPersonalHighScore(data[0].score);
+      if (normalData && normalData.length > 0) {
+        setPersonalHighScore(normalData[0].score);
+      }
+
+      // Fetch Arrow Dash Highscore
+      const { data: dashData } = await supabase
+        .from('arrow_dash_scores')
+        .select('score')
+        .eq('user_id', uid)
+        .order('score', { ascending: false })
+        .limit(1);
+      
+      if (dashData && dashData.length > 0) {
+        setPersonalDashHighScore(dashData[0].score);
       }
     } catch (err) {
-      console.error('Failed to fetch personal high score:', err);
+      console.error('Failed to fetch personal high scores:', err);
     }
   };
 
@@ -223,16 +236,22 @@ export default function App() {
       if (session?.user) {
         try {
           const table = mode === 'arrow_dash' ? 'arrow_dash_scores' : 'high_scores';
-          // Use upsert to update existing or insert new score
-          await supabase.from(table).upsert({
+          // Use insert instead of upsert to avoid requiring unique constraints in the DB
+          const scoreData: any = {
             user_id: session.user.id,
             username: session.user.user_metadata.username || session.user.email?.split('@')[0],
-            email: session.user.email,
             score: finalScore,
-          }, { onConflict: 'user_id' });
+          };
+          
+          // Optionally save email if the column exists in the table
+          scoreData.email = session.user.email;
+          
+          await supabase.from(table).insert(scoreData);
           
           if (mode === 'normal' && finalScore > personalHighScore) {
             setPersonalHighScore(finalScore);
+          } else if (mode === 'arrow_dash' && finalScore > personalDashHighScore) {
+            setPersonalDashHighScore(finalScore);
           }
         } catch (err) {
           console.error('Failed to save score:', err);
@@ -644,6 +663,12 @@ export default function App() {
             </motion.div>
             
             <div className="flex flex-col gap-4 w-full max-w-xs">
+              {session && (
+                <div className="mb-2 p-4 bg-white/5 border border-[#ff0055]/20 rounded-xl w-full text-center">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-1">Dein Bestwert</p>
+                  <p className="text-3xl font-black text-[#ff0055] font-mono">{personalDashHighScore}</p>
+                </div>
+              )}
               <button 
                 onClick={() => setGameState('ARROW_DASH')}
                 className="group relative w-full py-5 bg-[#ff0055] text-white font-black text-2xl rounded-xl hover:scale-105 active:scale-95 transition-all shadow-[0_0_20px_rgba(255,0,85,0.4)] overflow-hidden"
